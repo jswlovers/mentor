@@ -1,0 +1,190 @@
+import { DatabaseSync } from "node:sqlite";
+import fs from "node:fs";
+import path from "node:path";
+
+export const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), "data");
+fs.mkdirSync(DATA_DIR, { recursive: true });
+
+const g = globalThis as unknown as { __mentorDb?: DatabaseSync };
+
+function open() {
+  const db = new DatabaseSync(path.join(DATA_DIR, "mentor.sqlite"));
+  // 빌드 워커 등 여러 프로세스가 동시에 열어도 잠금 대기하도록 가장 먼저 설정한다.
+  db.exec("PRAGMA busy_timeout = 10000");
+  db.exec(`
+    PRAGMA journal_mode = WAL;
+
+    -- role: member | admin. expert_status: none | pending | approved | rejected
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      username TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL,
+      pw_hash TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'member',
+      expert_status TEXT NOT NULL DEFAULT 'none',
+      expert_bio TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS sessions (
+      token TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id),
+      expires_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS questions (
+      id TEXT PRIMARY KEY,
+      asker_id TEXT NOT NULL REFERENCES users(id),
+      asker_name TEXT NOT NULL,
+      category TEXT NOT NULL,
+      title TEXT NOT NULL,
+      body TEXT NOT NULL,
+      hair_type TEXT NOT NULL DEFAULT '-',
+      product TEXT NOT NULL DEFAULT '-',
+      status TEXT NOT NULL DEFAULT 'open',
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS answers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      question_id TEXT NOT NULL REFERENCES questions(id),
+      author_id TEXT NOT NULL REFERENCES users(id),
+      author_name TEXT NOT NULL,
+      is_expert INTEGER NOT NULL DEFAULT 0,
+      body TEXT NOT NULL,
+      accepted INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_answers_q ON answers(question_id);
+
+    -- 복식부기 코인 원장. 잔액은 항상 이 원장에서 계산한다.
+    -- account: user:<id> | earn:<id>(전문가 수익) | platform:cash | platform:revenue | platform:promo
+    --          | platform:withdraw_hold(출금 신청 보류) | platform:payout(지급 완료)
+    CREATE TABLE IF NOT EXISTS coin_ledger (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      transaction_group TEXT NOT NULL,
+      account TEXT NOT NULL,
+      direction TEXT NOT NULL CHECK (direction IN ('debit','credit')),
+      amount INTEGER NOT NULL CHECK (amount > 0),
+      user_id TEXT,
+      type TEXT NOT NULL,
+      note TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_coin_ledger_account ON coin_ledger(account);
+
+    CREATE TABLE IF NOT EXISTS coin_charges (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL,
+      amount_krw INTEGER NOT NULL,
+      coins INTEGER NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      provider TEXT NOT NULL DEFAULT 'manual',
+      provider_order_id TEXT,
+      provider_response TEXT,
+      admin_note TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      processed_at TEXT
+    );
+
+    -- 상담 세션. 질문자(asker)가 시작비를 내면 열리고, 승인된 전문가가 참여(claim)하면 정산이 시작된다.
+    -- status: open | ended | cancelled
+    CREATE TABLE IF NOT EXISTS consultations (
+      room_id TEXT PRIMARY KEY,
+      asker_id TEXT NOT NULL,
+      asker_name TEXT NOT NULL,
+      fee INTEGER NOT NULL,
+      expert_id TEXT,
+      expert_name TEXT,
+      status TEXT NOT NULL DEFAULT 'open',
+      started_at TEXT NOT NULL DEFAULT (datetime('now')),
+      ended_at TEXT
+    );
+
+    -- 질문 하나가 곧 채팅방. attachment_type: NULL | 'image' | 'file' | 'call'
+    CREATE TABLE IF NOT EXISTS messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      room_id TEXT NOT NULL,
+      sender_id TEXT NOT NULL,
+      sender_name TEXT NOT NULL,
+      body TEXT NOT NULL,
+      attachment_type TEXT,
+      attachment_url TEXT,
+      attachment_name TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_messages_room ON messages(room_id, id);
+
+    -- 전문가 출금 신청. status: pending | paid | rejected
+    CREATE TABLE IF NOT EXISTS withdrawals (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL REFERENCES users(id),
+      amount INTEGER NOT NULL,
+      bank_info TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      admin_note TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      processed_at TEXT
+    );
+
+    -- 고객센터. category: complaint | refund | report | other. target_user_id는 신고 대상.
+    CREATE TABLE IF NOT EXISTS support_tickets (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL REFERENCES users(id),
+      category TEXT NOT NULL,
+      subject TEXT NOT NULL,
+      body TEXT NOT NULL,
+      target_user_id TEXT REFERENCES users(id),
+      status TEXT NOT NULL DEFAULT 'pending',
+      admin_note TEXT,
+      refund_coins INTEGER,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      processed_at TEXT
+    );
+
+    -- 종료된 통화. 한쪽이 종료하면 기록하고, 상대 쪽은 요금 확인(tick)에서 이를 보고 함께 종료한다.
+    CREATE TABLE IF NOT EXISTS call_ends (
+      call_url TEXT PRIMARY KEY,
+      room_id TEXT NOT NULL,
+      ended_by TEXT NOT NULL,
+      ended_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- 앱 안 알림. link는 눌렀을 때 이동할 경로.
+    CREATE TABLE IF NOT EXISTS notifications (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL REFERENCES users(id),
+      body TEXT NOT NULL,
+      link TEXT,
+      read_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, read_at, id);
+
+    CREATE TABLE IF NOT EXISTS question_images (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      question_id TEXT NOT NULL REFERENCES questions(id),
+      url TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_qimg_q ON question_images(question_id);
+
+    -- 상담 후기: 상담(room) 하나당 질문자가 1건. 종료된 상담만.
+    CREATE TABLE IF NOT EXISTS reviews (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      room_id TEXT NOT NULL UNIQUE,
+      expert_id TEXT NOT NULL REFERENCES users(id),
+      asker_id TEXT NOT NULL REFERENCES users(id),
+      asker_name TEXT NOT NULL,
+      rating INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
+      comment TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_reviews_expert ON reviews(expert_id);
+  `);
+  // 신고 누적 자동 정지용 컬럼 (이미 있으면 무시)
+  try { db.exec(`ALTER TABLE users ADD COLUMN suspended_at TEXT`); } catch {}
+  try { db.exec(`ALTER TABLE users ADD COLUMN suspended_reason TEXT`); } catch {}
+  try { db.exec(`ALTER TABLE coin_charges ADD COLUMN depositor TEXT`); } catch {}
+  return db;
+}
+
+export const db: DatabaseSync = (g.__mentorDb ??= open());

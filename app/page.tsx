@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import Intro from "@/app/components/Intro";
 import { api, timeAgo } from "@/lib/client";
 
 type Row = { id: string; asker_name: string; category: string; title: string; status: string; created_at: string; answer_count: number; consult_status: string | null };
@@ -25,6 +26,7 @@ export default function Home() {
 
   return (
     <div>
+      <Intro />
       <div className="flex gap-2 overflow-x-auto border-b px-4 py-3">
         {MENUS.map((c) => (
           <button

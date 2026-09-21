@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import { db } from "@/lib/server/db";
 import { getUser, limited, unauthorized } from "@/lib/server/http";
 
-const CATEGORIES = new Set(["펌", "염색", "탈색", "커트", "클리닉", "매장운영"]);
+const CATEGORIES = new Set(["펌", "염색", "탈색", "커트", "클리닉", "매장운영", "자유게시판", "지역모임 · 서울", "지역모임 · 경기", "지역모임 · 인천", "지역모임 · 부산", "지역모임 · 대구", "지역모임 · 광주", "지역모임 · 대전", "지역모임 · 울산", "지역모임 · 세종"]);
 
 const listStmt = db.prepare(`
   SELECT q.id, q.asker_id, q.asker_name, q.category, q.title, q.status, q.created_at,

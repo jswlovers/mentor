@@ -51,4 +51,4 @@ export function timeAgo(sqliteUtc: string) {
   return h < 24 ? `${h}시간 전` : `${Math.floor(h / 24)}일 전`;
 }
 
-export const CATEGORIES = ["펌", "염색", "탈색", "커트", "클리닉", "매장운영"] as const;
+export const CATEGORIES = ["펌", "염색", "탈색", "커트", "클리닉", "매장운영", "자유게시판", "지역모임 · 서울", "지역모임 · 경기", "지역모임 · 인천", "지역모임 · 부산", "지역모임 · 대구", "지역모임 · 광주", "지역모임 · 대전", "지역모임 · 울산", "지역모임 · 세종"] as const;

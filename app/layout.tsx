@@ -12,9 +12,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="ko" className="h-full antialiased">
       <body className="min-h-full bg-neutral-100 text-neutral-900">
-        <div className="mx-auto flex min-h-screen max-w-md flex-col bg-white shadow">
+        <div className="flex min-h-screen flex-col">
           <Header />
-          <main className="flex-1">{children}</main>
+          <main className="mx-auto w-full max-w-4xl flex-1 border-x bg-white">{children}</main>
         </div>
       </body>
     </html>

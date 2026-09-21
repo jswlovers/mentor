@@ -22,7 +22,7 @@ export default function Login() {
   };
 
   return (
-    <form onSubmit={submit} className="space-y-3 p-4">
+    <form onSubmit={submit} className="mx-auto max-w-md space-y-3 p-4 py-10">
       <h1 className="text-lg font-bold">{mode === "login" ? "로그인" : "회원가입"}</h1>
       <input className={input} placeholder="아이디 (영문 소문자·숫자·_ 4~20자)" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" />
       {mode === "signup" && <input className={input} placeholder="이름(닉네임)" value={name} onChange={(e) => setName(e.target.value)} />}

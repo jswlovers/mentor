@@ -14,7 +14,7 @@ export default function Header() {
   };
 
   return (
-    <header className="sticky top-0 z-10 border-b bg-white px-4 py-3">
+    <header className="sticky top-0 z-10 border-b bg-white py-3"><div className="mx-auto max-w-4xl px-4">
       <div className="flex items-center justify-between">
         <Link href="/" className="text-lg font-bold text-rose-600">미용 SOS</Link>
         <div className="flex items-center gap-2 text-sm">
@@ -40,6 +40,6 @@ export default function Header() {
           <button onClick={logout} className="shrink-0 underline">로그아웃</button>
         </nav>
       )}
-    </header>
+    </div></header>
   );
 }

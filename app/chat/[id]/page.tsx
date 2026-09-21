@@ -46,7 +46,7 @@ function CallPanel({ call, roomId, billed, onEnd }: { call: Call; roomId: string
 
   const rate = COST_PER_SEC[call.type];
   return (
-    <div className="fixed inset-0 z-20 mx-auto flex max-w-md flex-col bg-black">
+    <div className="fixed inset-0 z-20 mx-auto flex max-w-4xl flex-col bg-black">
       <iframe src={call.url} allow="camera; microphone; fullscreen; display-capture" className="flex-1 border-0" title="통화" />
       <div className="flex items-center justify-between bg-neutral-900 px-4 py-3 text-sm text-white">
         <span>

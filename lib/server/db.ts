@@ -188,3 +188,24 @@ function open() {
 }
 
 export const db: DatabaseSync = (g.__mentorDb ??= open());
+
+// 개인 일기장(본인만 열람). 연결이 개발 서버에서 캐시돼도 새 테이블이 생기도록 open() 밖에서 매번 실행한다(IF NOT EXISTS).
+// date는 'YYYY-MM-DD'(사용자 로컬 날짜). 사진은 파일명만 저장하고, 조회는 항상 user_id로 걸러낸다.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS diary_entries (
+    user_id TEXT NOT NULL REFERENCES users(id),
+    date TEXT NOT NULL,
+    body TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (user_id, date)
+  );
+  CREATE TABLE IF NOT EXISTS diary_images (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL REFERENCES users(id),
+    date TEXT NOT NULL,
+    filename TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_diary_images_day ON diary_images(user_id, date);
+`);

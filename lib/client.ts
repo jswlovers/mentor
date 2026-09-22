@@ -8,6 +8,7 @@ export type Me = {
   isAdmin: boolean;
   expertStatus: "none" | "pending" | "approved" | "rejected";
   isExpert: boolean;
+  position: string | null;
   coins: number;
   earnings: number;
   unread: number;

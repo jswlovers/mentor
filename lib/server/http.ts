@@ -8,15 +8,16 @@ export type User = {
   isAdmin: boolean;
   expertStatus: "none" | "pending" | "approved" | "rejected";
   isExpert: boolean;
+  position: string | null;
 };
 
 export const SESSION_COOKIE = "mentor_session";
 const SESSION_DAYS = 14;
 
-type Row = { id: string; username: string; name: string; role: string; expert_status: User["expertStatus"]; suspended_at: string | null };
+type Row = { id: string; username: string; name: string; role: string; expert_status: User["expertStatus"]; suspended_at: string | null; position: string | null };
 
 const findSession = db.prepare(
-  `SELECT u.id, u.username, u.name, u.role, u.expert_status, u.suspended_at
+  `SELECT u.id, u.username, u.name, u.role, u.expert_status, u.suspended_at, u.position
    FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ? AND s.expires_at > ?`,
 );
 const insertSession = db.prepare(`INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)`);
@@ -44,6 +45,7 @@ export function getUser(req: Request): User | null {
     isAdmin: row.role === "admin",
     expertStatus: row.expert_status,
     isExpert: row.expert_status === "approved",
+    position: row.position,
   };
 }
 

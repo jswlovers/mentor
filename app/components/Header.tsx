@@ -2,10 +2,12 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api, useMe } from "@/lib/client";
+import { POSITION_MENU_LABEL, POSITION_SLUG, type Position } from "@/lib/regions";
 
 export default function Header() {
   const { me, refresh } = useMe();
   const router = useRouter();
+  const position = (me?.position ?? null) as Position | null;
 
   const logout = async () => {
     await api("/api/auth/logout", { method: "POST" });
@@ -35,6 +37,8 @@ export default function Header() {
         <nav className="mt-2 flex gap-3 overflow-x-auto text-xs text-neutral-600">
           <Link href="/account" className="shrink-0 font-semibold text-neutral-900">{me.name}님</Link>
           <Link href="/expert" className="shrink-0 underline">{me.isExpert ? "전문가 센터" : "전문가 신청"}</Link>
+          <Link href="/jobs" className="shrink-0 underline">구인구직</Link>
+          {position && <Link href={`/board/${POSITION_SLUG[position]}`} className="shrink-0 underline">{POSITION_MENU_LABEL[position]} 게시판</Link>}
           <Link href="/support" className="shrink-0 underline">고객센터</Link>
           {me.isAdmin && <Link href="/admin" className="shrink-0 underline">관리자</Link>}
           <button onClick={logout} className="shrink-0 underline">로그아웃</button>

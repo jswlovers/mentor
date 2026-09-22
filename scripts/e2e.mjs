@@ -26,6 +26,16 @@ const check = (name, ok, extra = "") => {
 };
 const form = (o) => { const f = new FormData(); for (const [k, v] of Object.entries(o)) f.set(k, v); return f; };
 
+// 가입에는 휴대폰 인증(중복가입 방지)과 직급(원장/디자이너/인턴) 선택이 필요하다.
+let phoneSeq = Date.now() % 90000000;
+const nextPhone = () => "010" + String(++phoneSeq).padStart(8, "0");
+async function signupFull(c, username, password, name, position = "디자이너") {
+  const phone = nextPhone();
+  const sent = await c("/api/auth/phone/send", "POST", { phone });
+  if (sent.data.devCode) await c("/api/auth/phone/verify", "POST", { phone, code: sent.data.devCode });
+  return c("/api/auth/signup", "POST", { username, password, name, phone, position });
+}
+
 const admin = client(), asker = client(), expert = client(), other = client();
 const sfx = Math.random().toString(36).slice(2, 6);
 const names = { asker: `asker_${sfx}`, expert: `expert_${sfx}`, other: `other_${sfx}` };
@@ -34,13 +44,15 @@ let q2x;
 
 // ── 인증
 const adminName = `admin_${Math.random().toString(36).slice(2, 6)}`;
-r = await admin("/api/auth/signup", "POST", { username: adminName, password: "adminpass1", name: "관리자" });
+r = await signupFull(admin, adminName, "adminpass1", "관리자", "원장");
 check("관리자 후보 가입", r.status === 201, JSON.stringify(r));
 check("가입만으로는 관리자가 될 수 없음", (await admin("/api/admin/overview")).status === 403);
 execFileSync("node", ["scripts/make-admin.mjs", adminName], { stdio: "pipe" });
 check("make-admin 후 관리자 API 접근", (await admin("/api/admin/overview")).status === 200);
+// 직급을 서로 다르게 줘서 직급 게시판 접근 제어(원장님/디자이너/인턴 상호 차단)를 아래에서 검증한다.
+const rolePosition = { [names.asker]: "인턴", [names.expert]: "디자이너", [names.other]: "원장" };
 for (const [c, u] of [[asker, names.asker], [expert, names.expert], [other, names.other]]) {
-  r = await c("/api/auth/signup", "POST", { username: u, password: "password1", name: u });
+  r = await signupFull(c, u, "password1", u, rolePosition[u]);
   check(`가입 ${u}`, r.status === 201, JSON.stringify(r));
 }
 check("짧은 비밀번호 거절", (await client()("/api/auth/signup", "POST", { username: "shortpw1", password: "1234", name: "x" })).status === 400);
@@ -202,12 +214,39 @@ check("티켓 환불 처리", (await admin(`/api/admin/tickets/${tk.id}/refund`,
 const reporters = [];
 for (let i = 0; i < 5; i++) {
   const c = client();
-  await c("/api/auth/signup", "POST", { username: `rep${i}_${sfx}`, password: "password1", name: `rep${i}` });
+  await signupFull(c, `rep${i}_${sfx}`, "password1", `rep${i}`);
   reporters.push(c);
 }
 for (const c of reporters) await c("/api/support", "POST", { category: "report", subject: "신고", body: "욕설", targetUsername: names.other });
 check("신고 5건 누적 → 자동 정지(세션 무효화)", (await other("/api/auth/me")).data.user === null);
 check("정지 계정 로그인 차단", (await client()("/api/auth/login", "POST", { username: names.other, password: "password1" })).status === 403);
+
+// ── 휴대폰 중복가입 방지 / 직급 게시판 / 구인구직
+// (expert/other 세션은 위에서 비밀번호 초기화·자동 정지로 이미 무효화됐을 수 있어 여기서는 새 계정을 쓴다.)
+{
+  const dupPhone = nextPhone();
+  const c1 = client(), c2 = client(), c3 = client();
+  const sent1 = await c1("/api/auth/phone/send", "POST", { phone: dupPhone });
+  await c1("/api/auth/phone/verify", "POST", { phone: dupPhone, code: sent1.data.devCode });
+  r = await c1("/api/auth/signup", "POST", { username: `dup1_${sfx}`, password: "password1", name: "dup1", phone: dupPhone, position: "인턴" });
+  check("휴대폰 인증 후 가입", r.status === 201, JSON.stringify(r));
+  check("인증 없이 가입 거절", (await client()("/api/auth/signup", "POST", { username: `dup2_${sfx}`, password: "password1", name: "dup2", phone: nextPhone(), position: "인턴" })).status === 400);
+  const sent2 = await c2("/api/auth/phone/send", "POST", { phone: dupPhone });
+  check("이미 가입된 번호는 인증 요청도 거절", sent2.status === 409, JSON.stringify(sent2));
+
+  await signupFull(c3, `designer_${sfx}`, "password1", "디자이너계정", "디자이너");
+  check("디자이너는 디자이너 게시판 접근 가능", (await c3("/api/position-posts?position=디자이너")).status === 200);
+  check("인턴은 디자이너 게시판 접근 불가", (await c1("/api/position-posts?position=디자이너")).status === 403);
+  r = await c3("/api/position-posts", "POST", { position: "디자이너", title: "테스트 글", body: "본문" });
+  check("직급 게시판 글쓰기", r.status === 201, JSON.stringify(r));
+  check("다른 직급으로 글쓰기 시도 거절", (await c3("/api/position-posts", "POST", { position: "인턴", title: "x", body: "y" })).status === 403);
+
+  r = await c3("/api/jobs", "POST", { type: "hire", city: "서울", district: "강남구", title: "테스트 채용", body: "본문" });
+  check("구인구직 글쓰기", r.status === 201, JSON.stringify(r));
+  r = await client()("/api/jobs?type=hire&city=서울&district=강남구");
+  check("구인구직 목록 공개 조회", r.status === 200 && r.data.some((j) => j.title === "테스트 채용"), JSON.stringify(r.data));
+  check("존재하지 않는 지역은 거절", (await client()("/api/jobs?type=hire&city=서울&district=없는구")).status === 400);
+}
 
 // ── 원장 정합성: 모든 transaction_group의 차변=대변
 r = await admin("/api/admin/overview");

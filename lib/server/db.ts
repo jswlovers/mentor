@@ -189,6 +189,51 @@ function open() {
 
 export const db: DatabaseSync = (g.__mentorDb ??= open());
 
+// 직급(원장/디자이너/인턴) · 휴대폰 인증 · 직급 게시판 · 구인구직.
+// 개발 서버에서 기존 연결이 캐시돼도 새 컬럼/테이블이 생기도록 open() 밖에서 매번 실행한다(diary 테이블과 동일한 이유).
+try { db.exec(`ALTER TABLE users ADD COLUMN phone TEXT`); } catch {}
+try { db.exec(`ALTER TABLE users ADD COLUMN position TEXT`); } catch {}
+// 기존 회원(가입 당시 phone이 없던 계정)은 NULL을 허용하고, 값이 있으면 중복을 막는다.
+db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone ON users(phone) WHERE phone IS NOT NULL`);
+
+db.exec(`
+  -- 휴대폰 인증번호(중복가입 방지용). 실제 SMS 연동 전이라 인증번호는 API 응답으로 그대로 돌려준다(개발/테스트용).
+  CREATE TABLE IF NOT EXISTS phone_verifications (
+    phone TEXT PRIMARY KEY,
+    code TEXT NOT NULL,
+    expires_at INTEGER NOT NULL,
+    verified INTEGER NOT NULL DEFAULT 0,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  -- 직급별 게시판(원장/디자이너/인턴). 같은 직급 회원(과 관리자)만 조회·작성할 수 있다.
+  CREATE TABLE IF NOT EXISTS position_posts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    position TEXT NOT NULL,
+    title TEXT NOT NULL,
+    body TEXT NOT NULL,
+    author_id TEXT NOT NULL REFERENCES users(id),
+    author_name TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_position_posts ON position_posts(position, id);
+
+  -- 구인구직: 대분류(채용/구직) · 도시 · 지역(구/시/군)으로 나눈 글.
+  CREATE TABLE IF NOT EXISTS job_posts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    type TEXT NOT NULL CHECK (type IN ('hire','seek')),
+    city TEXT NOT NULL,
+    district TEXT NOT NULL,
+    title TEXT NOT NULL,
+    body TEXT NOT NULL,
+    author_id TEXT NOT NULL REFERENCES users(id),
+    author_name TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_job_posts_loc ON job_posts(type, city, district, id);
+`);
+
 // 개인 일기장(본인만 열람). 연결이 개발 서버에서 캐시돼도 새 테이블이 생기도록 open() 밖에서 매번 실행한다(IF NOT EXISTS).
 // date는 'YYYY-MM-DD'(사용자 로컬 날짜). 사진은 파일명만 저장하고, 조회는 항상 user_id로 걸러낸다.
 db.exec(`

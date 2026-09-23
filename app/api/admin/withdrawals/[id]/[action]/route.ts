@@ -29,7 +29,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return Response.json({ error: "알 수 없는 처리예요" }, { status: 400 });
     }
     db.exec("COMMIT");
-    notify(w.user_id, action === "pay" ? `${w.amount.toLocaleString()}원 출금이 지급됐어요` : "출금 신청이 반려돼 수익으로 돌아왔어요", "/expert");
+    notify(w.user_id, action === "pay" ? `${w.amount.toLocaleString()}원 출금이 지급됐어요` : "출금 신청이 반려돼 수익으로 돌아왔어요", "/expert", action === "pay" ? { kind: "withdraw_paid", vars: { amount: w.amount.toLocaleString() } } : undefined);
   } catch (err) {
     db.exec("ROLLBACK");
     throw err;

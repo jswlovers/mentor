@@ -24,6 +24,23 @@ export const CONTINUE_MIN_COINS = 1500; // 통화 중 이 이하로 떨어지면
 export const EXPERT_SHARE = 0.7;
 export const MIN_WITHDRAW_COINS = 10_000;
 
+/**
+ * 무응답 자동 환불 / 전문가 호출 정책. 값은 코드에서 바꾸고, 테스트 서버에서만 환경변수로 줄여 쓴다.
+ * - 전문가가 이 시간(분) 안에 참여하지 않으면 상담을 자동 취소하고 질문자에게 전액 환불한다.
+ * - 상담이 열리면 한 번에 CALL_WAVE_SIZE명에게 알리고, WAVE2_MINUTES 뒤에도 미참여면 다음 CALL_WAVE_SIZE명에게 알린다.
+ * - 전문가 1명에게는 시간당 CALL_HOURLY_CAP건까지만 알린다. 야간(23~08시 KST)에는 카카오·문자를 보내지 않는다(앱 알림은 유지).
+ */
+const tune = (name: string, fallback: number) => {
+  const v = Number(process.env[name]);
+  return Number.isFinite(v) && v > 0 ? v : fallback;
+};
+export const AUTO_REFUND_MINUTES = tune("AUTO_REFUND_MINUTES", 60);
+export const WAVE2_MINUTES = tune("WAVE2_MINUTES", 15);
+export const CALL_WAVE_SIZE = tune("CALL_WAVE_SIZE", 5);
+export const CALL_HOURLY_CAP = tune("CALL_HOURLY_CAP", 3);
+export const SWEEP_INTERVAL_SECONDS = tune("SWEEP_INTERVAL_SECONDS", 60);
+export const RESPONSE_STAT_MIN_SAMPLES = 3; // 평균 응답시간은 표본이 이만큼 쌓인 뒤에 공개
+
 export const MAX_ROOM_MESSAGES = 500; // 방당 최대 보관 메시지 수
 
 export function messageCost(body: string, hasAttachment: boolean) {

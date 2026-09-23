@@ -11,7 +11,7 @@ type Msg = {
 };
 type Status = {
   started: boolean; status: "open" | "ended" | "cancelled" | null; role: "asker" | "expert" | "viewer";
-  canJoin: boolean; isQuestionOwner: boolean; expertName: string | null; expertId: string | null; reviewed: boolean; askerName: string | null; coins: number;
+  canJoin: boolean; isQuestionOwner: boolean; category: string; expertName: string | null; expertId: string | null; reviewed: boolean; askerName: string | null; coins: number;
 };
 type Call = { url: string; type: "voice" | "video" };
 
@@ -46,14 +46,14 @@ function CallPanel({ call, roomId, billed, onEnd }: { call: Call; roomId: string
 
   const rate = COST_PER_SEC[call.type];
   return (
-    <div className="fixed inset-0 z-20 mx-auto flex max-w-md flex-col bg-black">
+    <div className="fixed inset-0 z-20 mx-auto flex max-w-3xl flex-col bg-black">
       <iframe src={call.url} allow="camera; microphone; fullscreen; display-capture" className="flex-1 border-0" title="통화" />
-      <div className="flex items-center justify-between bg-neutral-900 px-4 py-3 text-sm text-white">
+      <div className="flex items-center justify-between border-t border-border bg-surface-2 px-4 py-3 text-sm text-white">
         <span>
           {call.type === "video" ? "페이스톡" : "보이스톡"} {Math.floor(sec / 60)}:{String(sec % 60).padStart(2, "0")}
           {billed ? ` · 사용 ${won(sec * rate)}${coins !== null ? ` · 잔액 ${coins.toLocaleString()}` : ""}` : " · 무료"}
         </span>
-        <button onClick={() => { ended.current = true; api("/api/calls/end", jsonInit("POST", { roomId, url: call.url })); onEnd(); }} className="rounded-full bg-rose-600 px-3 py-1">종료</button>
+        <button onClick={() => { ended.current = true; api("/api/calls/end", jsonInit("POST", { roomId, url: call.url })); onEnd(); }} className="rounded-full bg-rose-500 px-3 py-1 hover:bg-rose-400">종료</button>
       </div>
     </div>
   );
@@ -70,6 +70,8 @@ export default function Chat() {
   const [call, setCall] = useState<Call | null>(null);
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState("");
+  const [experts, setExperts] = useState<{ id: string; name: string; headline: string | null; rating: number | null }[]>([]);
+  const [pick, setPick] = useState("");
   const lastId = useRef(0);
   const bottom = useRef<HTMLDivElement>(null);
 
@@ -86,6 +88,16 @@ export default function Chat() {
   }, [loadStatus]);
 
   const participant = !!status && status.started && status.role !== "viewer";
+
+  // 상담 시작 전, 질문 분야에 맞는 전문가 목록(지정용)
+  const startPending = !!status && !status.started && status.isQuestionOwner;
+  const category = status?.category;
+  useEffect(() => {
+    if (!startPending || !category) return;
+    api<{ id: string; name: string; headline: string | null; rating: number | null }[]>(`/api/experts?category=${encodeURIComponent(category)}`).then((r) => {
+      if (r.ok && Array.isArray(r.data)) setExperts(r.data as never);
+    });
+  }, [startPending, category]);
 
   // 3초마다 새 메시지를 가져온다 (포레스트클럽과 같은 폴링 방식).
   useEffect(() => {
@@ -148,30 +160,39 @@ export default function Chat() {
     if (last?.attachment_url) join(type, last.attachment_url);
   };
 
-  if (!status) return <p className="p-8 text-center text-sm text-neutral-500">{err || "불러오는 중…"}{err.includes("로그인") && <> <Link href="/login" className="text-rose-600 underline">로그인</Link></>}</p>;
+  if (!status) return <p className="p-8 text-center text-sm text-muted">{err || "불러오는 중…"}{err.includes("로그인") && <> <Link href="/login" className="text-rose-400 underline">로그인</Link></>}</p>;
 
   // ── 상담 시작 전 ──
   if (!status.started) {
     return (
-      <div className="space-y-4 p-4">
+      <div className="mx-auto max-w-xl space-y-4 px-6 py-8">
         <h1 className="text-lg font-bold">전문가 상담 신청</h1>
         {status.isQuestionOwner ? (
           <>
-            <div className="rounded-xl border p-4 text-sm">
+            <div className="rounded-xl border border-border bg-surface p-4 text-sm">
               <p>상담 시작비 <b>{won(CONSULT_START_FEE)}</b> 를 결제하면 채팅과 통화를 시작할 수 있어요.</p>
-              <ul className="mt-2 list-disc space-y-0.5 pl-5 text-xs text-neutral-600">
+              <ul className="mt-2 list-disc space-y-0.5 pl-5 text-xs text-muted">
                 <li>쪽지 글자당 {MESSAGE_PER_CHAR}코인 (최소 500코인, 1회 {MAX_MESSAGE_CHARS}자 이내)</li>
                 <li>보이스톡 초당 {COST_PER_SEC.voice}코인 · 페이스톡 초당 {COST_PER_SEC.video}코인</li>
-                <li>전문가가 참여하기 전에는 언제든 전액 환불로 취소할 수 있어요.</li>
+                <li>전문가가 참여하기 전에는 언제든 전액 환불로 취소할 수 있어요. 일정 시간 안에 참여하지 않으면 자동으로 취소·전액 환불돼요.</li>
               </ul>
               <p className="mt-3">내 코인: <b>{status.coins.toLocaleString()}</b></p>
             </div>
-            {status.coins < CONSULT_START_FEE && <Link href="/coins" className="block rounded-lg border py-2 text-center text-sm">코인 충전하러 가기</Link>}
-            {err && <p className="text-sm text-rose-600">{err}</p>}
-            <button onClick={() => post("/api/consultations", { roomId })} className="w-full rounded-lg bg-rose-600 py-3 font-medium text-white">{won(CONSULT_START_FEE)} 결제하고 상담 시작</button>
+            {status.coins < CONSULT_START_FEE && <Link href="/coins" className="block rounded-lg border border-border py-2 text-center text-sm hover:border-white/30">코인 충전하러 가기</Link>}
+            {err && <p className="text-sm text-rose-400">{err}</p>}
+            {experts.length > 0 && (
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs text-muted">원하는 전문가를 지정하면 그분께 먼저 알려요 (선택)</span>
+                <select className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-foreground" value={pick} onChange={(e) => setPick(e.target.value)}>
+                  <option value="">지정 안 함 (적합한 전문가에게 자동 호출)</option>
+                  {experts.map((x) => <option key={x.id} value={x.id}>{x.name}{x.rating !== null ? ` ★${x.rating.toFixed(1)}` : ""}{x.headline ? ` · ${x.headline}` : ""}</option>)}
+                </select>
+              </label>
+            )}
+            <button onClick={() => post("/api/consultations", { roomId, expertId: pick || undefined })} className="w-full rounded-lg bg-rose-500 py-3 font-medium text-white hover:bg-rose-400">{won(CONSULT_START_FEE)} 결제하고 상담 시작</button>
           </>
         ) : (
-          <p className="text-sm text-neutral-600">질문 작성자가 상담을 시작하면 승인된 전문가가 참여할 수 있어요.</p>
+          <p className="text-sm text-muted">질문 작성자가 상담을 시작하면 승인된 전문가가 참여할 수 있어요.</p>
         )}
       </div>
     );
@@ -180,16 +201,16 @@ export default function Chat() {
   // ── 상담 참여 전(구경) ──
   if (status.role === "viewer") {
     return (
-      <div className="space-y-4 p-4">
+      <div className="mx-auto max-w-xl space-y-4 px-6 py-8">
         <h1 className="text-lg font-bold">1:1 상담</h1>
         {status.canJoin ? (
           <>
-            <p className="text-sm text-neutral-600">{status.askerName}님이 상담을 신청했어요. 참여하면 질문자가 낸 금액의 {Math.round(EXPERT_SHARE * 100)}%가 수익으로 쌓여요.</p>
-            {err && <p className="text-sm text-rose-600">{err}</p>}
-            <button onClick={() => post(`/api/consultations/${roomId}/join`)} className="w-full rounded-lg bg-rose-600 py-3 font-medium text-white">전문가로 상담 참여</button>
+            <p className="text-sm text-muted">{status.askerName}님이 상담을 신청했어요. 참여하면 질문자가 낸 금액의 {Math.round(EXPERT_SHARE * 100)}%가 수익으로 쌓여요.</p>
+            {err && <p className="text-sm text-rose-400">{err}</p>}
+            <button onClick={() => post(`/api/consultations/${roomId}/join`)} className="w-full rounded-lg bg-rose-500 py-3 font-medium text-white hover:bg-rose-400">전문가로 상담 참여</button>
           </>
         ) : (
-          <p className="text-sm text-neutral-600">이 상담은 참여자만 볼 수 있어요.</p>
+          <p className="text-sm text-muted">이 상담은 참여자만 볼 수 있어요.</p>
         )}
       </div>
     );
@@ -206,27 +227,27 @@ export default function Chat() {
   const chars = [...text].length;
 
   return (
-    <div className="flex h-[calc(100vh-88px)] flex-col">
-      <div className="flex items-center justify-between gap-2 border-b px-4 py-2 text-xs">
+    <div className="flex h-[calc(100vh-134px)] flex-col">
+      <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-2 text-xs text-muted">
         <span>
           {isAsker ? <>질문자(나) · 전문가: {status.expertId ? <Link href={`/experts/${status.expertId}`} className="underline">{status.expertName}</Link> : "대기 중"}</> : `전문가(나) · 질문자: ${status.askerName}`}
           {isAsker && ` · 잔액 ${status.coins.toLocaleString()}`}
         </span>
         <span className="flex shrink-0 gap-2">
-          {open && isAsker && !status.expertName && <button onClick={() => confirm("전액 환불하고 상담을 취소할까요?") && post(`/api/consultations/${roomId}/cancel`)} className="underline">취소·환불</button>}
-          {open && <button onClick={() => confirm("상담을 종료할까요? 종료 후에는 메시지·통화를 할 수 없어요.") && post(`/api/consultations/${roomId}/end`)} className="underline">상담 종료</button>}
-          <Link href={`/q/${roomId}`} className="text-rose-600 underline">질문</Link>
+          {open && isAsker && !status.expertName && <button onClick={() => confirm("전액 환불하고 상담을 취소할까요?") && post(`/api/consultations/${roomId}/cancel`)} className="underline hover:text-foreground">취소·환불</button>}
+          {open && <button onClick={() => confirm("상담을 종료할까요? 종료 후에는 메시지·통화를 할 수 없어요.") && post(`/api/consultations/${roomId}/end`)} className="underline hover:text-foreground">상담 종료</button>}
+          <Link href={`/q/${roomId}`} className="text-rose-400 underline">질문</Link>
         </span>
       </div>
-      <div className="flex-1 space-y-2 overflow-y-auto bg-neutral-50 p-3">
-        {isAsker && open && !status.expertName && <p className="rounded-lg bg-amber-50 p-2 text-center text-xs text-amber-800">전문가가 참여하길 기다리고 있어요. 메시지를 남겨두면 참여한 전문가가 볼 수 있어요.</p>}
-        {!open && <p className="rounded-lg bg-neutral-200 p-2 text-center text-xs">{status.status === "cancelled" ? "취소된 상담이에요 (전액 환불)" : "종료된 상담이에요"}</p>}
+      <div className="flex-1 space-y-2 overflow-y-auto bg-surface p-3">
+        {isAsker && open && !status.expertName && <p className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-2 text-center text-xs text-amber-300">전문가가 참여하길 기다리고 있어요. 메시지를 남겨두면 참여한 전문가가 볼 수 있어요.</p>}
+        {!open && <p className="rounded-lg bg-white/5 p-2 text-center text-xs text-muted">{status.status === "cancelled" ? "취소된 상담이에요 (전액 환불)" : "종료된 상담이에요"}</p>}
         {msgs.map((m) => {
           const mine = m.sender_id === me?.id;
           return (
             <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
-              <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${mine ? "bg-rose-600 text-white" : "bg-white shadow-sm"}`}>
-                {!mine && <p className="mb-0.5 text-[11px] font-semibold text-neutral-500">{m.sender_name}</p>}
+              <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${mine ? "bg-rose-500 text-white" : "border border-border bg-surface-2"}`}>
+                {!mine && <p className="mb-0.5 text-[11px] font-semibold text-muted">{m.sender_name}</p>}
                 <p className="whitespace-pre-wrap break-words">{m.body}</p>
                 {(m.attachment_type === "image" || m.attachment_type === "file") && m.attachment_url && <Attachment m={m} />}
                 {m.attachment_type === "call" && m.attachment_url && open && (
@@ -239,33 +260,33 @@ export default function Chat() {
         <div ref={bottom} />
       </div>
       {status.status === "ended" && isAsker && status.expertId && !status.reviewed && (
-        <div className="space-y-2 border-t bg-white p-3">
+        <div className="space-y-2 border-t border-border bg-surface p-3">
           <p className="text-sm font-medium">상담은 어땠나요?</p>
-          <div className="flex gap-1 text-2xl">{[1, 2, 3, 4, 5].map((n) => <button key={n} type="button" onClick={() => setRating(n)} className={n <= rating ? "text-amber-500" : "text-neutral-300"}>★</button>)}</div>
-          <input value={comment} onChange={(e) => setComment(e.target.value.slice(0, 300))} placeholder="후기 (선택, 300자 이내)" className="w-full rounded-lg border px-3 py-2 text-sm" />
-          <button onClick={review} className="w-full rounded-lg bg-rose-600 py-2 text-sm font-medium text-white">후기 남기기</button>
+          <div className="flex gap-1 text-2xl">{[1, 2, 3, 4, 5].map((n) => <button key={n} type="button" onClick={() => setRating(n)} className={n <= rating ? "text-amber-400" : "text-white/15"}>★</button>)}</div>
+          <input value={comment} onChange={(e) => setComment(e.target.value.slice(0, 300))} placeholder="후기 (선택, 300자 이내)" className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-foreground placeholder:text-muted" />
+          <button onClick={review} className="w-full rounded-lg bg-rose-500 py-2 text-sm font-medium text-white hover:bg-rose-400">후기 남기기</button>
         </div>
       )}
-      {status.status === "ended" && isAsker && status.reviewed && <p className="border-t bg-white p-3 text-center text-xs text-neutral-500">후기를 남겨주셔서 감사해요.</p>}
+      {status.status === "ended" && isAsker && status.reviewed && <p className="border-t border-border bg-surface p-3 text-center text-xs text-muted">후기를 남겨주셔서 감사해요.</p>}
       {open && (
-        <form onSubmit={submit} className="space-y-1.5 border-t bg-white p-3">
-          {err && <p className="text-xs text-rose-600">{err}</p>}
-          {file && <p className="text-xs text-neutral-600">📎 {file.name} <button type="button" onClick={() => setFile(null)} className="underline">취소</button></p>}
+        <form onSubmit={submit} className="space-y-1.5 border-t border-border bg-surface p-3">
+          {err && <p className="text-xs text-rose-400">{err}</p>}
+          {file && <p className="text-xs text-muted">📎 {file.name} <button type="button" onClick={() => setFile(null)} className="underline">취소</button></p>}
           <div className="flex gap-1.5">
-            <button type="button" onClick={() => requestCall("voice")} className="rounded-lg border px-2 text-lg" title="보이스톡">📞</button>
-            <button type="button" onClick={() => requestCall("video")} className="rounded-lg border px-2 text-lg" title="페이스톡">📹</button>
-            <label className="flex cursor-pointer items-center rounded-lg border px-2 text-lg" title="사진/파일">
+            <button type="button" onClick={() => requestCall("voice")} className="rounded-lg border border-border px-2 text-lg hover:border-white/30" title="보이스톡">📞</button>
+            <button type="button" onClick={() => requestCall("video")} className="rounded-lg border border-border px-2 text-lg hover:border-white/30" title="페이스톡">📹</button>
+            <label className="flex cursor-pointer items-center rounded-lg border border-border px-2 text-lg hover:border-white/30" title="사진/파일">
               📎<input type="file" className="hidden" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
             </label>
-            <input value={text} onChange={(e) => setText(e.target.value.slice(0, MAX_MESSAGE_CHARS))} placeholder="메시지 입력" className="min-w-0 flex-1 rounded-lg border px-3 py-2 text-sm" />
-            <button className="rounded-lg bg-neutral-900 px-3 text-sm text-white">전송</button>
+            <input value={text} onChange={(e) => setText(e.target.value.slice(0, MAX_MESSAGE_CHARS))} placeholder="메시지 입력" className="min-w-0 flex-1 rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-foreground placeholder:text-muted" />
+            <button className="rounded-lg bg-rose-500 px-3 text-sm text-white hover:bg-rose-400">전송</button>
           </div>
-          <p className="text-[11px] text-neutral-400">
+          <p className="text-[11px] text-muted">
             {chars}/{MAX_MESSAGE_CHARS}자{isAsker ? ` · 이 메시지 ${won(cost)}${file ? ` (첨부 ${ATTACHMENT_COST} 포함)` : ""}` : " · 전문가는 무료"}
           </p>
         </form>
       )}
-      {!open && err && <p className="p-3 text-xs text-rose-600">{err}</p>}
+      {!open && err && <p className="p-3 text-xs text-rose-400">{err}</p>}
       {call && <CallPanel call={call} roomId={roomId} billed={isAsker} onEnd={(reason) => { setCall(null); if (reason) setErr(reason); loadStatus(); }} />}
     </div>
   );

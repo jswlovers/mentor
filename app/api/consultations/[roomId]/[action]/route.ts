@@ -1,13 +1,10 @@
-import { claimExpert, getConsultation, roleOf } from "@/lib/server/consult";
-import { getBalance, refundFromRevenue } from "@/lib/server/coins";
+import { cancelAndRefund, claimExpert, getConsultation, roleOf } from "@/lib/server/consult";
+import { getBalance } from "@/lib/server/coins";
 import { db } from "@/lib/server/db";
 import { forbidden, getUser, unauthorized } from "@/lib/server/http";
 import { notify } from "@/lib/server/notify";
 
 const endStmt = db.prepare(`UPDATE consultations SET status = ?, ended_at = datetime('now') WHERE room_id = ? AND status = 'open'`);
-const spendStmt = db.prepare(
-  `SELECT COALESCE(SUM(amount), 0) AS total FROM coin_ledger WHERE account = ? AND direction = 'debit' AND instr(note, ?) > 0`,
-);
 
 // join: 승인된 전문가가 상담에 참여 / end: 상담 종료 / cancel: 전문가 배정 전 취소(전액 환불)
 export async function POST(req: Request, { params }: { params: Promise<{ roomId: string; action: string }> }) {
@@ -31,7 +28,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ roomId:
       db.exec("ROLLBACK");
       throw err;
     }
-    notify(c.asker_id, `${user.name} 전문가가 상담에 참여했어요`, `/chat/${roomId}`);
+    notify(c.asker_id, `${user.name} 전문가가 상담에 참여했어요`, `/chat/${roomId}`, { kind: "expert_joined", vars: { expert: user.name } });
     return Response.json({ ok: true });
   }
 
@@ -47,9 +44,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ roomId:
     if (c.expert_id) return Response.json({ error: "전문가가 참여한 상담은 취소할 수 없어요. 문제가 있으면 고객센터로 문의해주세요" }, { status: 409 });
     db.exec("BEGIN");
     try {
-      const spent = (spendStmt.get(`user:${c.asker_id}`, `(질문 ${roomId})`) as { total: number }).total;
-      if (spent > 0) refundFromRevenue(c.asker_id, spent, `상담 취소 환불 (질문 ${roomId})`);
-      endStmt.run("cancelled", roomId);
+      cancelAndRefund(c, "상담 취소 환불");
       db.exec("COMMIT");
     } catch (err) {
       db.exec("ROLLBACK");

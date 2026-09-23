@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api, CATEGORIES, jsonInit, useMe } from "@/lib/client";
 
-const input = "w-full rounded-lg border px-3 py-2 text-sm";
+const input = "w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-foreground placeholder:text-muted";
 
 export default function Ask() {
   const router = useRouter();
@@ -17,7 +17,7 @@ export default function Ask() {
   const [photos, setPhotos] = useState<File[]>([]);
   const [err, setErr] = useState("");
 
-  if (me === null) return <p className="p-8 text-center text-sm">질문하려면 <Link href="/login" className="text-rose-600 underline">로그인</Link>이 필요해요.</p>;
+  if (me === null) return <p className="p-8 text-center text-sm">질문하려면 <Link href="/login" className="text-rose-400 underline">로그인</Link>이 필요해요.</p>;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,11 +33,11 @@ export default function Ask() {
   };
 
   return (
-    <form onSubmit={submit} className="space-y-4 p-4">
+    <form onSubmit={submit} className="mx-auto max-w-xl space-y-4 px-6 py-8">
       <div className="flex flex-wrap gap-2">
         {CATEGORIES.map((c) => (
           <button type="button" key={c} onClick={() => setCategory(c)}
-            className={`rounded-full border px-3 py-1 text-sm ${category === c ? "border-rose-600 bg-rose-600 text-white" : ""}`}>{c}</button>
+            className={`rounded-full border px-3 py-1 text-sm transition ${category === c ? "border-rose-500 bg-rose-500 text-white" : "border-border text-muted hover:text-foreground"}`}>{c}</button>
         ))}
       </div>
       <input required maxLength={100} className={input} placeholder="제목 (예: 2회 탈색 후 모발 끝이 끊어져요)" value={title} onChange={(e) => setTitle(e.target.value)} />
@@ -48,11 +48,11 @@ export default function Ask() {
         <label className="block text-sm font-medium">사진 (선택, 최대 3장 · 장당 5MB)</label>
         <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple className="mt-1 text-sm"
           onChange={(e) => setPhotos(Array.from(e.target.files ?? []).slice(0, 3))} />
-        {photos.length > 0 && <p className="mt-1 text-xs text-neutral-500">{photos.map((p) => p.name).join(", ")}</p>}
+        {photos.length > 0 && <p className="mt-1 text-xs text-muted">{photos.map((p) => p.name).join(", ")}</p>}
       </div>
-      <p className="rounded-lg bg-amber-50 p-2 text-xs text-amber-800">사진은 질문과 함께 <b>누구에게나 공개</b>돼요. 고객의 얼굴·이름·연락처가 보이지 않게 가리거나 잘라서 올려주세요.</p>
-      {err && <p className="text-sm text-rose-600">{err}</p>}
-      <button className="w-full rounded-lg bg-rose-600 py-3 font-medium text-white">질문 등록 (무료)</button>
+      <p className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-2 text-xs text-amber-300">사진은 질문과 함께 <b>누구에게나 공개</b>돼요. 고객의 얼굴·이름·연락처가 보이지 않게 가리거나 잘라서 올려주세요.</p>
+      {err && <p className="text-sm text-rose-400">{err}</p>}
+      <button className="w-full rounded-lg bg-rose-500 py-3 font-medium text-white hover:bg-rose-400">질문 등록 (무료)</button>
     </form>
   );
 }

@@ -23,8 +23,8 @@ export default function TossSuccess() {
 
   return (
     <div className="space-y-4 p-8 text-center">
-      <p className={ok ? "text-emerald-700" : "text-neutral-700"}>{msg}</p>
-      <Link href="/coins" className="inline-block rounded-lg border px-4 py-2 text-sm">코인 화면으로</Link>
+      <p className={ok ? "text-emerald-400" : "text-foreground/80"}>{msg}</p>
+      <Link href="/coins" className="inline-block rounded-lg border border-border px-4 py-2 text-sm hover:border-white/30">코인 화면으로</Link>
     </div>
   );
 }

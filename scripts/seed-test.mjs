@@ -19,7 +19,7 @@ function client() {
   };
 }
 const ensure = async (c, username, name, password) => {
-  const r = await c("/api/auth/signup", "POST", { username, password, name });
+  const r = await c("/api/auth/signup", "POST", { username, password, name, agree: true });
   if (r.status === 409) await c("/api/auth/login", "POST", { username, password });
 };
 

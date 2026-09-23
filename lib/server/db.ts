@@ -148,6 +148,44 @@ function open() {
       ended_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    -- 휴대폰 인증번호(해시로 저장). 5분 유효, 5회 시도 제한.
+    CREATE TABLE IF NOT EXISTS phone_verifications (
+      user_id TEXT PRIMARY KEY REFERENCES users(id),
+      phone TEXT NOT NULL,
+      code_hash TEXT NOT NULL,
+      expires_at INTEGER NOT NULL,
+      attempts INTEGER NOT NULL DEFAULT 0
+    );
+
+    -- 카카오 알림톡/문자 발송 기록. channel: kakao | sms, status: sent | mock | failed
+    CREATE TABLE IF NOT EXISTS message_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT,
+      phone TEXT NOT NULL,
+      channel TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      text TEXT NOT NULL,
+      status TEXT NOT NULL,
+      response TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_msglog_user ON message_log(user_id, kind, id);
+
+    -- 전문가 담당 분야(없으면 모든 분야로 간주)와 상담 호출 기록(방당 전문가 1회).
+    CREATE TABLE IF NOT EXISTS expert_categories (
+      user_id TEXT NOT NULL REFERENCES users(id),
+      category TEXT NOT NULL,
+      PRIMARY KEY (user_id, category)
+    );
+    CREATE TABLE IF NOT EXISTS expert_calls (
+      room_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      wave INTEGER NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (room_id, user_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_expert_calls_user ON expert_calls(user_id, created_at);
+
     -- 앱 안 알림. link는 눌렀을 때 이동할 경로.
     CREATE TABLE IF NOT EXISTS notifications (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -179,11 +217,41 @@ function open() {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_reviews_expert ON reviews(expert_id);
+
+    -- 컬러핏 AI: 실제 업로드 사진의 픽셀 분석 결과 + 배합 추천 기록.
+    CREATE TABLE IF NOT EXISTS color_ai_recommendations (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id),
+      root_level INTEGER NOT NULL,
+      mid_level INTEGER NOT NULL,
+      end_level INTEGER NOT NULL,
+      undertone TEXT NOT NULL,
+      target_name TEXT NOT NULL,
+      target_level INTEGER NOT NULL,
+      target_color TEXT NOT NULL,
+      history TEXT NOT NULL,
+      tubes TEXT NOT NULL,
+      formula TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_color_ai_user ON color_ai_recommendations(user_id, id DESC);
   `);
   // 신고 누적 자동 정지용 컬럼 (이미 있으면 무시)
   try { db.exec(`ALTER TABLE users ADD COLUMN suspended_at TEXT`); } catch {}
   try { db.exec(`ALTER TABLE users ADD COLUMN suspended_reason TEXT`); } catch {}
   try { db.exec(`ALTER TABLE coin_charges ADD COLUMN depositor TEXT`); } catch {}
+  // 카카오 알림: 인증된 휴대폰 + 수신 동의가 모두 있어야 발송한다.
+  try { db.exec(`ALTER TABLE users ADD COLUMN phone TEXT`); } catch {}
+  try { db.exec(`ALTER TABLE users ADD COLUMN phone_verified_at TEXT`); } catch {}
+  try { db.exec(`ALTER TABLE users ADD COLUMN notify_kakao INTEGER NOT NULL DEFAULT 0`); } catch {}
+  try { db.exec(`ALTER TABLE users ADD COLUMN notify_consent_at TEXT`); } catch {}
+  // 전문가 호출/검색, 약관 동의, 응답시간 측정
+  try { db.exec(`ALTER TABLE users ADD COLUMN expert_available INTEGER NOT NULL DEFAULT 1`); } catch {}
+  try { db.exec(`ALTER TABLE users ADD COLUMN expert_headline TEXT`); } catch {}
+  try { db.exec(`ALTER TABLE users ADD COLUMN terms_version TEXT`); } catch {}
+  try { db.exec(`ALTER TABLE users ADD COLUMN terms_agreed_at TEXT`); } catch {}
+  try { db.exec(`ALTER TABLE consultations ADD COLUMN claimed_at TEXT`); } catch {}
+  try { db.exec(`ALTER TABLE consultations ADD COLUMN preferred_expert_id TEXT`); } catch {}
   return db;
 }
 

@@ -55,7 +55,7 @@ ok("종료 안내 메시지는 통화당 1건", endMsgs.length >= 2 && endMsgs.l
 
 // 3) 권한
 const o = cl();
-await o("/api/auth/signup", "POST", { username: "outsider" + Math.random().toString(36).slice(2, 6), password: "password1", name: "x" });
+await o("/api/auth/signup", "POST", { username: "outsider" + Math.random().toString(36).slice(2, 6), password: "password1", name: "x", agree: true });
 ok("제3자 종료 불가", (await o("/api/calls/end", "POST", { roomId: q, url })).status === 403);
 ok("없는 통화 URL 거절", (await a("/api/calls/end", "POST", { roomId: q, url: "https://x/none" })).status === 404);
 

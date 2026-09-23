@@ -133,7 +133,7 @@ export async function POST(req: Request) {
     pruneStmt.run(roomId, roomId);
     db.exec("COMMIT");
     const fresh = getConsultation(roomId)!;
-    notify(user.id === fresh.asker_id ? fresh.expert_id : fresh.asker_id, `${user.name}님이 메시지를 보냈어요`, `/chat/${roomId}`);
+    notify(user.id === fresh.asker_id ? fresh.expert_id : fresh.asker_id, `${user.name}님이 메시지를 보냈어요`, `/chat/${roomId}`, { kind: "new_message", vars: { sender: user.name } });
     return Response.json({ id: Number(info.lastInsertRowid), cost, coins: getBalance(user.id) }, { status: 201 });
   } catch (err) {
     db.exec("ROLLBACK");

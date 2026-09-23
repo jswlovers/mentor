@@ -11,6 +11,9 @@ export type Me = {
   coins: number;
   earnings: number;
   unread: number;
+  phone: string | null;
+  phoneVerified: boolean;
+  notifyKakao: boolean;
 };
 
 // 세션 쿠키(HttpOnly)로 인증하므로 fetch가 쿠키를 자동으로 보낸다.
@@ -51,4 +54,4 @@ export function timeAgo(sqliteUtc: string) {
   return h < 24 ? `${h}시간 전` : `${Math.floor(h / 24)}일 전`;
 }
 
-export const CATEGORIES = ["펌", "염색", "탈색", "커트", "클리닉", "매장운영"] as const;
+export const CATEGORIES = ["펌", "염색", "염색클리닉", "탈색", "커트", "클리닉", "매장운영"] as const;

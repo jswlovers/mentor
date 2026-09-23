@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import { db } from "@/lib/server/db";
 import { getUser, limited, unauthorized } from "@/lib/server/http";
 
-const CATEGORIES = new Set(["펌", "염색", "탈색", "커트", "클리닉", "매장운영"]);
+const CATEGORIES = new Set(["펌", "염색", "염색클리닉", "탈색", "커트", "클리닉", "매장운영"]);
 
 const listStmt = db.prepare(`
   SELECT q.id, q.asker_id, q.asker_name, q.category, q.title, q.status, q.created_at,

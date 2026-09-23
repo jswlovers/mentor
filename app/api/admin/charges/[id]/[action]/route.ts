@@ -24,14 +24,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       creditCoins(charge.user_id, charge.coins, "purchase", note || `관리자 수동 승인 (${charge.amount_krw.toLocaleString()}원 입금 확인)`);
       setStatus.run("approved", note || null, charge.id);
       db.exec("COMMIT");
-      notify(charge.user_id, `${charge.coins.toLocaleString()}코인이 충전됐어요`, "/coins");
+      notify(charge.user_id, `${charge.coins.toLocaleString()}코인이 충전됐어요`, "/coins", { kind: "charge_approved", vars: { coins: charge.coins.toLocaleString() } });
     } catch (err) {
       db.exec("ROLLBACK");
       throw err;
     }
   } else if (action === "reject") {
     setStatus.run("rejected", note || "사유 미기재", charge.id);
-    notify(charge.user_id, `충전 신청이 반려됐어요 (${note || "사유 미기재"})`, "/coins");
+    notify(charge.user_id, `충전 신청이 반려됐어요 (${note || "사유 미기재"})`, "/coins", { kind: "charge_rejected", vars: { reason: note || "사유 미기재" } });
   } else {
     return Response.json({ error: "알 수 없는 처리예요" }, { status: 400 });
   }

@@ -20,6 +20,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const body = String((await req.json().catch(() => ({}))).body ?? "").trim().slice(0, 3000);
   if (!body) return Response.json({ error: "답변 내용을 입력해주세요" }, { status: 400 });
   insertStmt.run(id, user.id, user.name, user.isExpert ? 1 : 0, body);
-  if (q.asker_id !== user.id) notify(q.asker_id, `내 질문에 ${user.name}님이 답변했어요`, `/q/${id}`);
+  if (q.asker_id !== user.id) notify(q.asker_id, `내 질문에 ${user.name}님이 답변했어요`, `/q/${id}`, { kind: "answer_received", vars: { name: user.name } });
   return Response.json({ ok: true }, { status: 201 });
 }

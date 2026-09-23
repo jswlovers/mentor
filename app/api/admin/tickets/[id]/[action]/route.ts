@@ -35,6 +35,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   } else {
     return Response.json({ error: "알 수 없는 처리예요" }, { status: 400 });
   }
-  notify(t.user_id, "문의가 처리됐어요", "/support");
+  notify(t.user_id, "문의가 처리됐어요", "/support", { kind: "ticket_resolved" });
   return Response.json({ ok: true });
 }

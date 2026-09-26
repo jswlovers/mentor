@@ -6,7 +6,7 @@ const charges = db.prepare(
   `SELECT c.id, c.amount_krw, c.coins, c.status, c.created_at, c.depositor, u.name AS user_name FROM coin_charges c JOIN users u ON u.id = c.user_id ORDER BY (c.status = 'pending') DESC, c.id DESC LIMIT 100`,
 );
 const experts = db.prepare(
-  `SELECT id, username, name, expert_status, expert_bio FROM users WHERE expert_status IN ('pending','approved','rejected') ORDER BY (expert_status = 'pending') DESC, created_at DESC`,
+  `SELECT id, username, name, expert_status, expert_bio, expert_years, expert_salon, expert_license_no, (expert_license_file IS NOT NULL) AS has_license FROM users WHERE expert_status IN ('pending','approved','rejected') ORDER BY (expert_status = 'pending') DESC, created_at DESC`,
 );
 const withdrawals = db.prepare(
   `SELECT w.id, w.amount, w.bank_info, w.status, w.created_at, u.name AS user_name FROM withdrawals w JOIN users u ON u.id = w.user_id ORDER BY (w.status = 'pending') DESC, w.id DESC LIMIT 100`,

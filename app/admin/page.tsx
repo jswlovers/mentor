@@ -5,7 +5,7 @@ import { api, jsonInit, useMe } from "@/lib/client";
 
 type Overview = {
   charges: { id: number; amount_krw: number; status: string; created_at: string; user_name: string; depositor: string | null }[];
-  experts: { id: string; username: string; name: string; expert_status: string; expert_bio: string | null }[];
+  experts: { id: string; username: string; name: string; expert_status: string; expert_bio: string | null; expert_years: number | null; expert_salon: string | null; expert_license_no: string | null; has_license: number }[];
   withdrawals: { id: number; amount: number; bank_info: string; status: string; created_at: string; user_name: string }[];
   tickets: { id: number; category: string; subject: string; body: string; status: string; user_name: string; target_name: string | null; created_at: string }[];
   users: { id: string; username: string; name: string; role: string; expert_status: string; suspended_at: string | null }[];
@@ -64,6 +64,10 @@ export default function Admin() {
           <li key={x.id} className="space-y-1 py-2">
             <div className="flex items-center justify-between"><span>{x.name} <span className="text-xs text-muted">@{x.username} · {x.expert_status}</span></span>
               {x.expert_status === "pending" && <span className="flex gap-1"><button className={btn} onClick={() => act(`/api/admin/experts/${x.id}/approve`)}>승인</button><button className={btn} onClick={() => act(`/api/admin/experts/${x.id}/reject`)}>반려</button></span>}</div>
+            <p className="text-xs text-muted">
+              경력 {x.expert_years ?? "미입력"}{x.expert_years !== null ? "년" : ""} · 살롱 {x.expert_salon ?? "미입력"} · 면허번호 {x.expert_license_no ?? "미입력"} ·{" "}
+              {x.has_license ? <a href={`/api/admin/experts/${x.id}/license`} target="_blank" rel="noreferrer" className="font-semibold text-rose-400 underline">면허증 보기</a> : <span className="text-amber-300">면허증 없음(이전 방식 신청)</span>}
+            </p>
             <p className="whitespace-pre-wrap text-xs text-muted">{x.expert_bio}</p>
           </li>
         ))}

@@ -14,6 +14,10 @@ const input = "w-full rounded-lg border border-border bg-surface-2 px-3 py-2 tex
 export default function Expert() {
   const { me, refresh } = useMe();
   const [bio, setBio] = useState("");
+  const [years, setYears] = useState("");
+  const [salon, setSalon] = useState("");
+  const [licenseNo, setLicenseNo] = useState("");
+  const [license, setLicense] = useState<File | null>(null);
   const [data, setData] = useState<Earn | null>(null);
   const [amount, setAmount] = useState(10000);
   const [bank, setBank] = useState("");
@@ -44,7 +48,14 @@ export default function Expert() {
   if (!me.isExpert) {
     const apply = async (e: React.FormEvent) => {
       e.preventDefault();
-      const r = await api("/api/experts/apply", jsonInit("POST", { bio }));
+      if (!license) return setMsg("미용사 면허증(또는 자격증) 사진을 첨부해주세요");
+      const f = new FormData();
+      f.append("bio", bio);
+      f.append("years", years);
+      f.append("salon", salon);
+      f.append("licenseNo", licenseNo);
+      f.append("license", license);
+      const r = await api("/api/experts/apply", { method: "POST", body: f });
       setMsg(r.ok ? "신청했어요. 관리자가 검토한 뒤 승인해요." : r.data.error || "신청에 실패했어요");
       refresh();
     };
@@ -55,6 +66,29 @@ export default function Expert() {
         {me.expertStatus === "rejected" && <p className="rounded-lg border border-rose-500/20 bg-rose-500/10 p-3 text-sm text-rose-300">이전 신청이 반려됐어요. 내용을 보완해 다시 신청해주세요.</p>}
         {me.expertStatus !== "pending" && (
           <form onSubmit={apply} className="space-y-3">
+            <div className="rounded-lg border border-border bg-surface p-3 text-xs leading-5 text-muted">
+              <p className="font-semibold text-foreground">신청 조건</p>
+              <ul className="mt-1 list-disc pl-4">
+                <li>미용사 면허증(또는 미용 관련 국가자격증) 사진 첨부</li>
+                <li>경력 연수와 근무 중인(또는 최근) 살롱 입력</li>
+                <li>경력·자격·전문 분야 소개 20자 이상</li>
+              </ul>
+              <p className="mt-1">관리자가 면허증과 경력을 확인한 뒤 승인해요. 면허증 사진은 심사에만 쓰고 공개되지 않아요.</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="text-xs font-semibold text-muted">경력 연수(년)
+                <input required type="number" min={0} max={60} inputMode="numeric" className={`${input} mt-1`} placeholder="예: 7" value={years} onChange={(e) => setYears(e.target.value)} />
+              </label>
+              <label className="text-xs font-semibold text-muted">근무 살롱
+                <input required maxLength={60} className={`${input} mt-1`} placeholder="예: OO헤어 강남점" value={salon} onChange={(e) => setSalon(e.target.value)} />
+              </label>
+            </div>
+            <label className="block text-xs font-semibold text-muted">미용사 면허번호 (선택)
+              <input maxLength={30} className={`${input} mt-1`} placeholder="면허증에 적힌 번호" value={licenseNo} onChange={(e) => setLicenseNo(e.target.value)} />
+            </label>
+            <label className="block text-xs font-semibold text-muted">면허증·자격증 사진 (필수, JPG·PNG·WEBP 5MB 이하)
+              <input required type="file" accept="image/jpeg,image/png,image/webp" className="mt-1 block w-full text-sm text-foreground" onChange={(e) => setLicense(e.target.files?.[0] ?? null)} />
+            </label>
             <textarea required rows={6} maxLength={1000} className={input} placeholder="경력, 자격(미용사 면허 등), 전문 분야를 20자 이상 적어주세요" value={bio} onChange={(e) => setBio(e.target.value)} />
             <button className="w-full rounded-lg bg-rose-500 py-3 font-medium text-white hover:bg-rose-400">전문가 신청</button>
           </form>

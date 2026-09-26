@@ -290,6 +290,11 @@ export const db: DatabaseSync = (g.__mentorDb ??= open());
 // 개발 서버에서 기존 연결이 캐시돼도 새 컬럼/테이블이 생기도록 open() 밖에서 매번 실행한다(diary 테이블과 동일한 이유).
 try { db.exec(`ALTER TABLE users ADD COLUMN phone TEXT`); } catch {}
 try { db.exec(`ALTER TABLE users ADD COLUMN position TEXT`); } catch {}
+// 전문가 신청 심사 자료: 경력 연수, 근무 살롱, 미용사 면허번호, 면허증 사진(비공개 파일명, 관리자만 열람).
+try { db.exec(`ALTER TABLE users ADD COLUMN expert_years INTEGER`); } catch {}
+try { db.exec(`ALTER TABLE users ADD COLUMN expert_salon TEXT`); } catch {}
+try { db.exec(`ALTER TABLE users ADD COLUMN expert_license_no TEXT`); } catch {}
+try { db.exec(`ALTER TABLE users ADD COLUMN expert_license_file TEXT`); } catch {}
 // 기존 회원(가입 당시 phone이 없던 계정)은 NULL을 허용하고, 값이 있으면 중복을 막는다.
 db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone ON users(phone) WHERE phone IS NOT NULL`);
 

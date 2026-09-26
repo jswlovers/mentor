@@ -235,6 +235,35 @@ function open() {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_color_ai_user ON color_ai_recommendations(user_id, id DESC);
+
+    -- 컬러핏 Q&A 지식 베이스: 영상·책 등에서 학습한 내용. 시드 파일(colorKnowledgeSeed.ts)에서 upsert.
+    CREATE TABLE IF NOT EXISTS color_knowledge_sources (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      author TEXT NOT NULL,
+      url TEXT NOT NULL,
+      note TEXT NOT NULL DEFAULT ''
+    );
+    CREATE TABLE IF NOT EXISTS color_knowledge (
+      id TEXT PRIMARY KEY,
+      source_id TEXT NOT NULL REFERENCES color_knowledge_sources(id),
+      title TEXT NOT NULL,
+      keywords TEXT NOT NULL,
+      summary TEXT NOT NULL,
+      points TEXT NOT NULL,
+      page TEXT,
+      ts INTEGER,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    -- 들어온 질문 기록. 답을 못 찾은 질문(matched=0)을 보고 지식을 보강한다.
+    CREATE TABLE IF NOT EXISTS color_knowledge_questions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT,
+      question TEXT NOT NULL,
+      top_entry_id TEXT,
+      matched INTEGER NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `);
   // 신고 누적 자동 정지용 컬럼 (이미 있으면 무시)
   try { db.exec(`ALTER TABLE users ADD COLUMN suspended_at TEXT`); } catch {}

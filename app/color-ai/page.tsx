@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ChangeEvent, useCallback, useEffect, useState } from "react";
 import { api, jsonInit, timeAgo, useMe } from "@/lib/client";
+import ColorQna from "./ColorQna";
 
 const targetColors = [
   { name: "로즈 브라운", level: "8레벨", color: "#a95f5d" },
@@ -293,6 +294,8 @@ export default function ColorAiPage() {
           ) : null}
         </div>
       </div>
+
+      <ColorQna />
     </div>
   );
 }

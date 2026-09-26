@@ -1,6 +1,7 @@
 // 컬러핏 AI의 목표 컬러와 염모제 카탈로그 조회. 화면(보유 염모제 필터)과 서버(배합 계산)가 함께 쓴다.
 import { DYE_BRANDS, type DyeBrand, type DyeLine, type DyeShade, type ToneFamily } from "./dyeCatalog";
 import { neutralizerFamilies, type WheelHue } from "./colorWheel";
+import { fillerFamilies, isToneDown } from "./toning";
 
 export { DYE_BRANDS };
 export type { DyeBrand, DyeLine, DyeShade, ToneFamily };
@@ -75,14 +76,18 @@ export type TargetColor = (typeof TARGET_COLORS)[number];
 export const TARGET_GROUPS: string[] = [...new Set<string>(TARGET_COLORS.map((c) => c.group))];
 
 // 목표 레벨에서 드러나는 잔류 색소를 지울 보색 계열. 난색 목표는 잔류 색소가 오히려 도움이 되므로 중화하지 않는다.
-export function correctionFamilies(target: TargetColor, level: number): readonly ToneFamily[] {
+// 크게 톤다운할 때는 잔류 색소를 지우지 않고 오히려 조정색으로 채우므로 보색 중화를 하지 않는다.
+export function correctionFamilies(target: TargetColor, level: number, currentLevel?: number): readonly ToneFamily[] {
+  if (isToneDown(level, currentLevel)) return [];
   return target.warm ? [] : neutralizerFamilies(level);
 }
 
 // 보정·베이스용으로 보여줄 계열: 목표 레벨의 보색 중화 계열 + 목표별 기본 계열(메인 계열은 뺀다).
-export function supportFamilies(target: TargetColor, level: number): ToneFamily[] {
+// 크게 톤다운할 때는 조정색(레드·오렌지·골드) 계열을 앞에 넣는다.
+export function supportFamilies(target: TargetColor, level: number, currentLevel?: number): ToneFamily[] {
   const main: readonly ToneFamily[] = target.families;
-  return [...new Set<ToneFamily>([...correctionFamilies(target, level), ...target.supports])].filter((f) => !main.includes(f));
+  const extra = isToneDown(level, currentLevel) ? fillerFamilies(level) : correctionFamilies(target, level, currentLevel);
+  return [...new Set<ToneFamily>([...extra, ...target.supports])].filter((f) => !main.includes(f));
 }
 
 export function findTarget(name: string): TargetColor | undefined {

@@ -5,7 +5,7 @@ import { ChangeEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api, jsonInit, timeAgo, useMe } from "@/lib/client";
 import { DYE_BRANDS, FAMILY_LABEL, TARGET_COLORS, TARGET_GROUPS, correctionFamilies, findShade, supportFamilies, type DyeShade, type TargetColor, type ToneFamily } from "@/lib/colorTargets";
 import { LEVEL_CHART, levelColor, levelFromRgb } from "@/lib/levelChart";
-import { TONER_MIN_SHADE_LEVEL, isToning } from "@/lib/toning";
+import { TONER_MIN_SHADE_LEVEL, currentLevelOf, isToneDown, isToning, toneDownShadeLevel } from "@/lib/toning";
 import ColorQna from "./ColorQna";
 
 const histories = ["탈색 1회", "흑염색 이력", "손상모", "새치 30%"];
@@ -13,7 +13,7 @@ const UNDERTONE_LABEL: Record<string, string> = { warm: "웜(잔류 오렌지)",
 
 type Analysis = { root: number; mid: number; end: number; undertone: "warm" | "cool" | "neutral" };
 type MixItem = { tube: string; grams: number; owned: boolean };
-type Formula = { mix: MixItem[]; developerPercent: number; ratio: string; timeMinutes: number; order: string; matchScore: number; notes: string[]; toning?: string[] };
+type Formula = { mix: MixItem[]; developerPercent: number; ratio: string; timeMinutes: number; order: string; matchScore: number; notes: string[]; guide?: { title: string; steps: string[] } };
 type HistoryRow = { id: string; targetName: string; targetColor: string; formula: Formula; createdAt: string };
 
 // 사진 픽셀을 실제로 읽어 뿌리/중간/끝 3구간의 밝기(레벨)와 웜/쿨 언더톤을 계산한다.
@@ -101,7 +101,7 @@ function LevelBar({ selected, markers = [], onSelect }: { selected?: number; mar
 const nearLevel = (s: DyeShade, level: number, range: number) => s.level === null || s.family === "clear" || Math.abs(s.level - level) <= range;
 
 // 브랜드·라인의 넘버 중 목표 컬러 계열과 목표 레벨에 맞는 것만 보여준다. "전체 넘버 보기"를 켜면 계열별로 전부 보여준다.
-function TubePicker({ brandId, lineId, target, targetLevel, selected, onToggle, showAll }: { brandId: string; lineId: string; target: TargetColor; targetLevel: number; selected: string[]; onToggle: (id: string) => void; showAll: boolean }) {
+function TubePicker({ brandId, lineId, target, targetLevel, currentLevel, selected, onToggle, showAll }: { brandId: string; lineId: string; target: TargetColor; targetLevel: number; currentLevel?: number; selected: string[]; onToggle: (id: string) => void; showAll: boolean }) {
   const shades = useMemo<PickerShade[]>(() => {
     const brand = DYE_BRANDS.find((b) => b.id === brandId) ?? DYE_BRANDS[0];
     return brand.lines
@@ -110,8 +110,11 @@ function TubePicker({ brandId, lineId, target, targetLevel, selected, onToggle, 
       .sort((a, b) => (b.level ?? -1) - (a.level ?? -1));
   }, [brandId, lineId]);
   const main: readonly ToneFamily[] = target.families;
-  const supports = supportFamilies(target, targetLevel);
-  const correctors = correctionFamilies(target, targetLevel);
+  const supports = supportFamilies(target, targetLevel, currentLevel);
+  const correctors = correctionFamilies(target, targetLevel, currentLevel);
+  // 크게 톤다운하면 넘버는 목표보다 1레벨 어둡게 고르므로 그 레벨을 중심으로 보여준다.
+  const toneDown = isToneDown(targetLevel, currentLevel);
+  const center = toneDown ? toneDownShadeLevel(targetLevel) : targetLevel;
   if (showAll) {
     const families = Object.keys(FAMILY_LABEL) as ToneFamily[];
     return (
@@ -132,14 +135,15 @@ function TubePicker({ brandId, lineId, target, targetLevel, selected, onToggle, 
   // 14레벨 이상은 해당 명도의 넘버가 없어, 탈색 후 고명도 넘버(11레벨 이상)를 클리어로 희석해 토닝한다.
   const toning = isToning(targetLevel);
   const tonerLevel = (s: DyeShade) => s.level === null || s.level >= TONER_MIN_SHADE_LEVEL;
-  const mainList = shades.filter((s) => main.includes(s.family) && !s.guessed && (toning ? tonerLevel(s) : nearLevel(s, targetLevel, 1)));
+  const mainList = shades.filter((s) => main.includes(s.family) && !s.guessed && (toning ? tonerLevel(s) : nearLevel(s, center, 1)));
   const supportList = shades.filter((s) => supports.includes(s.family) && !s.guessed && (toning ? tonerLevel(s) : nearLevel(s, targetLevel, 2)));
   return (
     <div>
+      {toneDown && currentLevel !== undefined ? <p className="mt-3 rounded-lg bg-amber-500/10 px-3 py-2 text-[11px] leading-4 text-amber-200">{currentLevel}레벨 → {targetLevel}레벨 톤다운이에요. 목표 넘버만으로는 명도가 안 나와서, {center}레벨(한 단계 어둡게) 넘버와 조정색(레드·오렌지·골드 계열)을 함께 골라주세요.</p> : null}
       {toning ? <p className="mt-3 rounded-lg bg-amber-500/10 px-3 py-2 text-[11px] leading-4 text-amber-200">{targetLevel}레벨은 염모제로 낼 수 없는 명도예요. 탈색 후 아래 고명도 넘버를 클리어로 희석해 토닝해요.</p> : null}
-      <p className="mt-3 text-xs font-bold text-rose-300">{toning ? `토닝용 · ${main.map((f) => FAMILY_LABEL[f]).join(", ")} · 고명도 ${TONER_MIN_SHADE_LEVEL}레벨 이상` : `메인 톤 · ${main.map((f) => FAMILY_LABEL[f]).join(", ")} · ${targetLevel}±1레벨`}</p>
+      <p className="mt-3 text-xs font-bold text-rose-300">{toning ? `토닝용 · ${main.map((f) => FAMILY_LABEL[f]).join(", ")} · 고명도 ${TONER_MIN_SHADE_LEVEL}레벨 이상` : `메인 톤 · ${main.map((f) => FAMILY_LABEL[f]).join(", ")} · ${center}±1레벨`}</p>
       <ShadeChips shades={mainList} selected={selected} onToggle={onToggle} />
-      <p className="mt-4 text-xs font-bold text-muted">{toning ? `보정·희석용 · ${supports.map((f) => FAMILY_LABEL[f]).join(", ")}` : `보정·베이스용 · ${supports.map((f) => FAMILY_LABEL[f]).join(", ")} · ${targetLevel}±2레벨`}</p>
+      <p className="mt-4 text-xs font-bold text-muted">{toning ? `보정·희석용 · ${supports.map((f) => FAMILY_LABEL[f]).join(", ")}` : `${toneDown ? "조정색·베이스용" : "보정·베이스용"} · ${supports.map((f) => FAMILY_LABEL[f]).join(", ")} · ${targetLevel}±2레벨`}</p>
       {correctors.length ? <p className="mt-1 text-[10px] leading-4 text-muted">보색 중화: {targetLevel}레벨에서 드러나는 잔류 색소를 지우는 {correctors.map((f) => FAMILY_LABEL[f]).join(", ")} 계열을 포함했어요.</p> : null}
       <ShadeChips shades={supportList} selected={selected} onToggle={onToggle} />
     </div>
@@ -351,7 +355,7 @@ export default function ColorAiPage() {
                 </select>
                 <label className="flex shrink-0 items-center gap-1.5 text-xs text-muted"><input type="checkbox" checked={showAllShades} onChange={(e) => setShowAllShades(e.target.checked)} />전체 넘버 보기</label>
               </div>
-              <TubePicker brandId={brandId} lineId={lineId} target={selectedColor} targetLevel={targetLevel} selected={selectedTubes} onToggle={(id) => toggle(id, selectedTubes, setSelectedTubes)} showAll={showAllShades} />
+              <TubePicker brandId={brandId} lineId={lineId} target={selectedColor} targetLevel={targetLevel} currentLevel={analysis ? currentLevelOf(analysis.root, analysis.mid, analysis.end) : undefined} selected={selectedTubes} onToggle={(id) => toggle(id, selectedTubes, setSelectedTubes)} showAll={showAllShades} />
               {selectedTubes.length > 0 ? (
                 <div className="mt-3 flex flex-wrap gap-1.5">
                   {selectedTubes.map((id) => {
@@ -387,11 +391,11 @@ export default function ColorAiPage() {
                 </div>
               </div>
               <div className="grid grid-cols-3 divide-x divide-border border-b border-border text-center"><div className="p-3"><span className="block text-[11px] text-muted">산화제</span><b className="text-xs">{formula.developerPercent}% · {formula.ratio}</b></div><div className="p-3"><span className="block text-[11px] text-muted">도포 순서</span><b className="text-xs">{formula.order}</b></div><div className="p-3"><span className="block text-[11px] text-muted">방치 시간</span><b className="text-xs">{formula.timeMinutes}분</b></div></div>
-              {formula.toning ? (
+              {formula.guide ? (
                 <div className="border-b border-border p-5">
-                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-amber-300">Toning Guide</p>
-                  <h3 className="mt-1 font-bold">탈색 후 토닝 방법</h3>
-                  <ol className="mt-2 list-decimal space-y-1.5 pl-4 text-xs leading-5 text-muted">{formula.toning.map((step, i) => <li key={i}>{step}</li>)}</ol>
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-amber-300">Procedure Guide</p>
+                  <h3 className="mt-1 font-bold">{formula.guide.title}</h3>
+                  <ol className="mt-2 list-decimal space-y-1.5 pl-4 text-xs leading-5 text-muted">{formula.guide.steps.map((step, i) => <li key={i}>{step}</li>)}</ol>
                 </div>
               ) : null}
               <div className="p-5"><p className="text-xs font-bold uppercase tracking-[0.16em] text-rose-400">Stylist Check</p><h3 className="mt-1 font-bold">시술 전 확인해 주세요</h3><ul className="mt-2 list-disc space-y-1 pl-4 text-xs leading-5 text-muted">{formula.notes.map((note, i) => <li key={i}>{note}</li>)}</ul></div>

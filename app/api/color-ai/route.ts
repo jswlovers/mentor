@@ -27,8 +27,9 @@ export async function GET(req: Request) {
   return Response.json({ recommendations: rows });
 }
 
+// 명도 차트(밀본 올디브 레벨 스케일) 1~20레벨.
 function isLevel(n: unknown): n is number {
-  return typeof n === "number" && Number.isInteger(n) && n >= 1 && n <= 10;
+  return typeof n === "number" && Number.isInteger(n) && n >= 1 && n <= 20;
 }
 
 // 사진 분석(브라우저 캔버스 픽셀 분석) 결과 + 시술 조건을 받아 배합을 계산한다.
@@ -41,7 +42,7 @@ export async function POST(req: Request) {
   }
 
   const body = await req.json().catch(() => ({}));
-  const { rootLevel, midLevel, endLevel, undertone, targetName, history, brandId, tubes, thickness } = body ?? {};
+  const { rootLevel, midLevel, endLevel, undertone, targetName, targetLevel, history, brandId, tubes, thickness } = body ?? {};
 
   if (!isLevel(rootLevel) || !isLevel(midLevel) || !isLevel(endLevel)) {
     return Response.json({ error: "모발 사진을 먼저 분석해주세요" }, { status: 400 });
@@ -51,6 +52,9 @@ export async function POST(req: Request) {
   }
   if (!TARGET_COLORS.some((c) => c.name === targetName)) {
     return Response.json({ error: "목표 컬러를 선택해주세요" }, { status: 400 });
+  }
+  if (targetLevel !== undefined && !isLevel(targetLevel)) {
+    return Response.json({ error: "목표 레벨을 선택해주세요" }, { status: 400 });
   }
   if (!Array.isArray(history) || history.some((h) => typeof h !== "string")) {
     return Response.json({ error: "시술 이력이 올바르지 않아요" }, { status: 400 });
@@ -65,6 +69,7 @@ export async function POST(req: Request) {
     endLevel,
     undertone: undertone as Undertone,
     targetName,
+    targetLevel,
     history,
     brandId: typeof brandId === "string" ? brandId : undefined,
     tubes,

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ChangeEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api, jsonInit, timeAgo, useMe } from "@/lib/client";
 import { DYE_BRANDS, FAMILY_LABEL, TARGET_COLORS, findShade, type DyeShade, type TargetColor, type ToneFamily } from "@/lib/colorTargets";
+import { LEVEL_CHART, levelColor, levelFromRgb } from "@/lib/levelChart";
 import ColorQna from "./ColorQna";
 
 const histories = ["탈색 1회", "흑염색 이력", "손상모", "새치 30%"];
@@ -45,10 +46,8 @@ function analyzeImage(imageUrl: string): Promise<Analysis> {
         }
         return { r: r / count, g: g / count, b: b / count };
       });
-      const toLevel = ({ r, g, b }: { r: number; g: number; b: number }) => {
-        const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-        return Math.min(10, Math.max(1, Math.round(1 + (lum / 255) * 9)));
-      };
+      // 밝기를 명도 차트(1~20레벨)의 모발 색과 비교해 레벨을 정한다.
+      const toLevel = ({ r, g, b }: { r: number; g: number; b: number }) => levelFromRgb(r, g, b);
       const [rootBand, midBand, endBand] = bands;
       const avg = { r: (rootBand.r + midBand.r + endBand.r) / 3, g: (rootBand.g + midBand.g + endBand.g) / 3, b: (rootBand.b + midBand.b + endBand.b) / 3 };
       const warmth = (avg.r - avg.b) / 255;
@@ -63,7 +62,7 @@ function analyzeImage(imageUrl: string): Promise<Analysis> {
 type PickerShade = DyeShade & { lineName: string };
 
 function ShadeChips({ shades, selected, onToggle }: { shades: PickerShade[]; selected: string[]; onToggle: (id: string) => void }) {
-  if (shades.length === 0) return <p className="mt-2 text-xs text-muted">이 라인에는 해당 계열 넘버가 없어요.</p>;
+  if (shades.length === 0) return <p className="mt-2 text-xs text-muted">이 레벨·계열에 맞는 넘버가 없어요.</p>;
   return (
     <div className="mt-2 grid max-h-64 grid-cols-3 gap-2 overflow-y-auto pr-1">
       {shades.map((s) => (
@@ -76,8 +75,32 @@ function ShadeChips({ shades, selected, onToggle }: { shades: PickerShade[]; sel
   );
 }
 
-// 브랜드·라인의 넘버 중 목표 컬러에 맞는 계열만 보여준다. "전체 넘버 보기"를 켜면 계열별로 전부 보여준다.
-function TubePicker({ brandId, lineId, target, selected, onToggle, showAll }: { brandId: string; lineId: string; target: TargetColor; selected: string[]; onToggle: (id: string) => void; showAll: boolean }) {
+// 명도 차트(1~20레벨). onSelect가 있으면 레벨을 고를 수 있고, markers 레벨은 흰 테두리로 표시한다.
+function LevelBar({ selected, markers = [], onSelect }: { selected?: number; markers?: number[]; onSelect?: (level: number) => void }) {
+  return (
+    <div className="mt-3">
+      <div className="flex gap-0.5">
+        {LEVEL_CHART.map((c) => {
+          const cls = `h-8 min-w-0 flex-1 rounded-sm ${selected === c.level ? "ring-2 ring-rose-400 ring-offset-1 ring-offset-surface" : markers.includes(c.level) ? "ring-2 ring-white/80" : ""}`;
+          return onSelect ? (
+            <button key={c.level} type="button" aria-label={`${c.level}레벨`} title={`${c.level}레벨`} onClick={() => onSelect(c.level)} style={{ backgroundColor: c.color }} className={cls} />
+          ) : (
+            <span key={c.level} title={`${c.level}레벨`} style={{ backgroundColor: c.color }} className={cls} />
+          );
+        })}
+      </div>
+      <div className="mt-1 flex gap-0.5 text-center text-[9px] text-muted">
+        {LEVEL_CHART.map((c) => <span key={c.level} className={`min-w-0 flex-1 ${selected === c.level ? "font-bold text-rose-300" : ""}`}>{c.level}</span>)}
+      </div>
+    </div>
+  );
+}
+
+// 목표 레벨 근처만 보여준다: 메인 톤은 ±1, 보정·베이스는 ±2. 레벨이 없는 넘버(컨트롤러 등)와 클리어는 항상 보인다.
+const nearLevel = (s: DyeShade, level: number, range: number) => s.level === null || s.family === "clear" || Math.abs(s.level - level) <= range;
+
+// 브랜드·라인의 넘버 중 목표 컬러 계열과 목표 레벨에 맞는 것만 보여준다. "전체 넘버 보기"를 켜면 계열별로 전부 보여준다.
+function TubePicker({ brandId, lineId, target, targetLevel, selected, onToggle, showAll }: { brandId: string; lineId: string; target: TargetColor; targetLevel: number; selected: string[]; onToggle: (id: string) => void; showAll: boolean }) {
   const shades = useMemo<PickerShade[]>(() => {
     const brand = DYE_BRANDS.find((b) => b.id === brandId) ?? DYE_BRANDS[0];
     return brand.lines
@@ -104,13 +127,13 @@ function TubePicker({ brandId, lineId, target, selected, onToggle, showAll }: { 
       </div>
     );
   }
-  const mainList = shades.filter((s) => main.includes(s.family) && !s.guessed);
-  const supportList = shades.filter((s) => supports.includes(s.family) && !s.guessed);
+  const mainList = shades.filter((s) => main.includes(s.family) && !s.guessed && nearLevel(s, targetLevel, 1));
+  const supportList = shades.filter((s) => supports.includes(s.family) && !s.guessed && nearLevel(s, targetLevel, 2));
   return (
     <div>
-      <p className="mt-3 text-xs font-bold text-rose-300">메인 톤 · {main.map((f) => FAMILY_LABEL[f]).join(", ")}</p>
+      <p className="mt-3 text-xs font-bold text-rose-300">메인 톤 · {main.map((f) => FAMILY_LABEL[f]).join(", ")} · {targetLevel}±1레벨</p>
       <ShadeChips shades={mainList} selected={selected} onToggle={onToggle} />
-      <p className="mt-4 text-xs font-bold text-muted">보정·베이스용 · {supports.map((f) => FAMILY_LABEL[f]).join(", ")}</p>
+      <p className="mt-4 text-xs font-bold text-muted">보정·베이스용 · {supports.map((f) => FAMILY_LABEL[f]).join(", ")} · {targetLevel}±2레벨</p>
       <ShadeChips shades={supportList} selected={selected} onToggle={onToggle} />
     </div>
   );
@@ -121,6 +144,7 @@ const selectCls = "mt-2 w-full rounded-lg border border-border bg-surface-2 px-3
 export default function ColorAiPage() {
   const { me } = useMe();
   const [selectedColor, setSelectedColor] = useState<TargetColor>(TARGET_COLORS[0]);
+  const [targetLevel, setTargetLevel] = useState<number>(TARGET_COLORS[0].level);
   const [selectedHistory, setSelectedHistory] = useState<string[]>([]);
   const [brandId, setBrandId] = useState(DYE_BRANDS[0].id);
   const [lineId, setLineId] = useState("all");
@@ -196,6 +220,7 @@ export default function ColorAiPage() {
         endLevel: analysis.end,
         undertone: analysis.undertone,
         targetName: selectedColor.name,
+        targetLevel,
         history: selectedHistory,
         brandId,
         tubes: selectedTubes,
@@ -258,10 +283,15 @@ export default function ColorAiPage() {
               {(["뿌리", "중간", "끝"] as const).map((zone, index) => (
                 <div key={zone} className="rounded-lg bg-white/5 px-2 py-2.5">
                   <span className="block text-[11px] text-muted">{zone}</span>
-                  <strong className="mt-1 block text-sm">{analysis ? `${[analysis.root, analysis.mid, analysis.end][index]} 레벨` : "분석 대기"}</strong>
+                  <strong className="mt-1 flex items-center gap-1.5 text-sm">
+                    {analysis ? <span className="h-3 w-3 shrink-0 rounded-sm ring-1 ring-white/20" style={{ backgroundColor: levelColor([analysis.root, analysis.mid, analysis.end][index]) }} /> : null}
+                    {analysis ? `${[analysis.root, analysis.mid, analysis.end][index]} 레벨` : "분석 대기"}
+                  </strong>
                 </div>
               ))}
             </div>
+            <p className="mt-3 text-[11px] text-muted">명도 차트 (밀본 올디브 레벨 스케일 기준){analysis ? " · 흰 테두리가 현재 모발 레벨" : ""}</p>
+            <LevelBar markers={analysis ? [analysis.root, analysis.mid, analysis.end] : []} />
             {analysis ? <p className="mt-2 text-center text-[11px] text-muted">언더톤 · {UNDERTONE_LABEL[analysis.undertone]}</p> : null}
           </section>
 
@@ -279,10 +309,12 @@ export default function ColorAiPage() {
             </div>
 
             <div className="mt-5">
-              <div className="flex items-center justify-between"><h3 className="text-sm font-bold">목표 컬러</h3><span className="text-xs text-muted">{selectedColor.level}레벨 {selectedColor.name}</span></div>
+              <div className="flex items-center justify-between"><h3 className="text-sm font-bold">목표 컬러</h3><span className="text-xs text-muted">{targetLevel}레벨 {selectedColor.name}</span></div>
               <div className="mt-3 flex flex-wrap gap-3">
-                {TARGET_COLORS.map((color) => <button key={color.name} type="button" aria-label={color.name} title={color.name} onClick={() => setSelectedColor(color)} style={{ backgroundColor: color.color }} className={`h-10 w-10 rounded-full ring-offset-2 ring-offset-surface ${selectedColor.name === color.name ? "ring-2 ring-rose-400" : ""}`} />)}
+                {TARGET_COLORS.map((color) => <button key={color.name} type="button" aria-label={color.name} title={color.name} onClick={() => { setSelectedColor(color); setTargetLevel(color.level); }} style={{ backgroundColor: color.color }} className={`h-10 w-10 rounded-full ring-offset-2 ring-offset-surface ${selectedColor.name === color.name ? "ring-2 ring-rose-400" : ""}`} />)}
               </div>
+              <div className="mt-4 flex items-center justify-between"><h3 className="text-sm font-bold">목표 레벨</h3><span className="text-xs text-muted">칸을 눌러 선택</span></div>
+              <LevelBar selected={targetLevel} markers={analysis ? [analysis.root, analysis.mid, analysis.end] : []} onSelect={setTargetLevel} />
             </div>
 
             <div className="mt-5 grid grid-cols-2 gap-3">
@@ -292,7 +324,7 @@ export default function ColorAiPage() {
 
             <div className="mt-5">
               <div className="flex items-center justify-between"><h3 className="text-sm font-bold">보유 염모제</h3><span className="text-xs text-muted">{selectedTubes.length}개 선택</span></div>
-              <p className="mt-1 text-[11px] leading-4 text-muted">목표 컬러({selectedColor.name})에 맞는 계열의 넘버만 보여줘요. 가지고 있는 넘버를 골라주세요.</p>
+              <p className="mt-1 text-[11px] leading-4 text-muted">목표 컬러({selectedColor.name})와 목표 레벨({targetLevel}레벨)에 맞는 넘버만 보여줘요. 가지고 있는 넘버를 골라주세요.</p>
               <div className="mt-2 flex items-center gap-2">
                 <select value={lineId} onChange={(e) => setLineId(e.target.value)} className="min-w-0 flex-1 rounded-lg border border-border bg-surface-2 px-3 py-2 text-xs text-foreground">
                   <option value="all">전체 라인</option>
@@ -300,7 +332,7 @@ export default function ColorAiPage() {
                 </select>
                 <label className="flex shrink-0 items-center gap-1.5 text-xs text-muted"><input type="checkbox" checked={showAllShades} onChange={(e) => setShowAllShades(e.target.checked)} />전체 넘버 보기</label>
               </div>
-              <TubePicker brandId={brandId} lineId={lineId} target={selectedColor} selected={selectedTubes} onToggle={(id) => toggle(id, selectedTubes, setSelectedTubes)} showAll={showAllShades} />
+              <TubePicker brandId={brandId} lineId={lineId} target={selectedColor} targetLevel={targetLevel} selected={selectedTubes} onToggle={(id) => toggle(id, selectedTubes, setSelectedTubes)} showAll={showAllShades} />
               {selectedTubes.length > 0 ? (
                 <div className="mt-3 flex flex-wrap gap-1.5">
                   {selectedTubes.map((id) => {
@@ -322,7 +354,7 @@ export default function ColorAiPage() {
             <section className="overflow-hidden rounded-2xl border border-border bg-surface">
               <div className="border-b border-border bg-surface-2 p-5">
                 <p className="text-xs font-bold uppercase tracking-[0.16em] text-rose-300">Recommended Formula</p>
-                <div className="mt-1 flex items-start justify-between gap-3"><div><h2 className="text-xl font-bold">{selectedColor.name} 배합</h2><p className="mt-1 text-xs text-muted">현재 밝기와 잔류 색소를 고려한 120g 기준입니다.</p></div><span className="rounded-full bg-lime-300 px-2 py-1 text-xs font-bold text-neutral-900">적합도 {formula.matchScore}%</span></div>
+                <div className="mt-1 flex items-start justify-between gap-3"><div><h2 className="text-xl font-bold">{targetLevel}레벨 {selectedColor.name} 배합</h2><p className="mt-1 text-xs text-muted">현재 밝기와 잔류 색소를 고려한 120g 기준입니다.</p></div><span className="rounded-full bg-lime-300 px-2 py-1 text-xs font-bold text-neutral-900">적합도 {formula.matchScore}%</span></div>
                 <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
                   {formula.mix.map((item, i) => (
                     <span key={item.tube} className="flex items-center gap-2">

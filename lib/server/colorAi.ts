@@ -28,6 +28,7 @@ export type RecommendInput = {
   endLevel: number;
   undertone: Undertone;
   targetName: string;
+  targetLevel?: number;
   history: string[];
   brandId?: string;
   tubes: string[];
@@ -64,13 +65,21 @@ export function computeRecommendation(input: RecommendInput): Formula {
   const mainFamilies: readonly ToneFamily[] = target.families;
 
   const currentLevel = Math.round(input.rootLevel * 0.4 + input.midLevel * 0.35 + input.endLevel * 0.25);
-  const levelGap = target.level - currentLevel;
+  // 목표 레벨은 화면에서 명도 차트로 고른 값. 없으면 목표 컬러의 기본 레벨.
+  const targetLevel = input.targetLevel ?? target.level;
+  const levelGap = targetLevel - currentLevel;
 
   const notes: string[] = [];
   let matchScore = 95;
 
+  // 염모제 리프트는 보통 3~4레벨이 한계라, 그 이상 밝혀야 하면 탈색을 먼저 안내한다.
+  if (levelGap >= 4) {
+    matchScore -= 8;
+    notes.push(`현재 ${currentLevel}레벨에서 목표 ${targetLevel}레벨까지 ${levelGap}레벨을 올려야 해요. 염모제만으로는 어려워 탈색 후 진행을 권장해요.`);
+  }
+
   // 1) 주 배합(목표 톤): 목표 계열 중 레벨이 가장 가까운 보유 넘버. 없으면 같은 브랜드에서 구매할 넘버를 제안.
-  let primary = nearest(owned.filter((r) => mainFamilies.includes(r.shade.family)), target.level);
+  let primary = nearest(owned.filter((r) => mainFamilies.includes(r.shade.family)), targetLevel);
   let primaryOwned = true;
   if (!primary) {
     primaryOwned = false;
@@ -78,15 +87,15 @@ export function computeRecommendation(input: RecommendInput): Formula {
     const candidates: ShadeRef[] = (brand?.lines ?? []).flatMap((line) =>
       line.shades.filter((sh) => mainFamilies.includes(sh.family) && !sh.guessed).map((shade) => ({ brand: brand!, line, shade })),
     );
-    primary = nearest(candidates, target.level);
+    primary = nearest(candidates, targetLevel);
     notes.push(
       primary
         ? `보유 염모제 중 ${familyNames(mainFamilies)} 계열이 없어요. ${shadeLabel(primary)} 구매 후 진행해주세요.`
         : `선택한 브랜드에 ${familyNames(mainFamilies)} 계열 넘버가 없어요. 다른 브랜드를 선택해주세요.`,
     );
-  } else if (primary.shade.level !== null && Math.abs(primary.shade.level - target.level) >= 2) {
+  } else if (primary.shade.level !== null && Math.abs(primary.shade.level - targetLevel) >= 2) {
     matchScore -= 6;
-    notes.push(`목표 ${target.level}레벨과 보유 넘버(${primary.shade.code}) 레벨 차이가 커서 발색이 달라질 수 있어요.`);
+    notes.push(`목표 ${targetLevel}레벨과 보유 넘버(${primary.shade.code}) 레벨 차이가 커서 발색이 달라질 수 있어요.`);
   }
 
   // 2) 보정: 웜 언더톤(잔류 오렌지)인데 목표가 차가운 계열이 아니면, 목표에 어울리는 쿨 계열 보유 넘버로 중화.
@@ -94,7 +103,7 @@ export function computeRecommendation(input: RecommendInput): Formula {
   const targetIsCool = COOL_FAMILIES.includes(mainFamilies[0]);
   if (input.undertone === "warm" && !targetIsCool) {
     const correctors = (target.supports as readonly ToneFamily[]).filter((f) => COOL_FAMILIES.includes(f));
-    secondary = nearest(owned.filter((r) => correctors.includes(r.shade.family) && r !== primary), target.level);
+    secondary = nearest(owned.filter((r) => correctors.includes(r.shade.family) && r !== primary), targetLevel);
     if (secondary) {
       notes.push(`잔류 오렌지가 감지되어 ${shadeLabel(secondary)}를 추가해 중화했어요.`);
     } else if (correctors.length) {
@@ -161,7 +170,7 @@ export function saveRecommendation(userId: string, id: string, input: RecommendI
     input.endLevel,
     input.undertone,
     target.name,
-    target.level,
+    input.targetLevel ?? target.level,
     target.color,
     JSON.stringify(input.history),
     JSON.stringify(input.tubes),

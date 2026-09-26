@@ -56,6 +56,15 @@ function nearest(refs: ShadeRef[], level: number): ShadeRef | undefined {
   return [...refs].sort((a, b) => cmp(a.shade, b.shade))[0];
 }
 
+// 계열 순서를 우선한다: 앞 계열(예: 와인 레드의 레드)에 목표 레벨 ±2 안의 넘버가 있으면 그것을, 없으면 전체에서 레벨이 가장 가까운 것.
+function nearestByFamily(refs: ShadeRef[], families: readonly ToneFamily[], level: number): ShadeRef | undefined {
+  for (const f of families) {
+    const hit = nearest(refs.filter((r) => r.shade.family === f), level);
+    if (hit && (hit.shade.level === null || Math.abs(hit.shade.level - level) <= 2)) return hit;
+  }
+  return nearest(refs.filter((r) => families.includes(r.shade.family)), level);
+}
+
 const familyNames = (fs: readonly ToneFamily[]) => fs.map((f) => FAMILY_LABEL[f]).join("/");
 
 export function computeRecommendation(input: RecommendInput): Formula {
@@ -80,7 +89,7 @@ export function computeRecommendation(input: RecommendInput): Formula {
   }
 
   // 1) 주 배합(목표 톤): 목표 계열 중 레벨이 가장 가까운 보유 넘버. 없으면 같은 브랜드에서 구매할 넘버를 제안.
-  let primary = nearest(owned.filter((r) => mainFamilies.includes(r.shade.family)), targetLevel);
+  let primary = nearestByFamily(owned, mainFamilies, targetLevel);
   let primaryOwned = true;
   if (!primary) {
     primaryOwned = false;
@@ -88,7 +97,7 @@ export function computeRecommendation(input: RecommendInput): Formula {
     const candidates: ShadeRef[] = (brand?.lines ?? []).flatMap((line) =>
       line.shades.filter((sh) => mainFamilies.includes(sh.family) && !sh.guessed).map((shade) => ({ brand: brand!, line, shade })),
     );
-    primary = nearest(candidates, targetLevel);
+    primary = nearestByFamily(candidates, mainFamilies, targetLevel);
     notes.push(
       primary
         ? `보유 염모제 중 ${familyNames(mainFamilies)} 계열이 없어요. ${shadeLabel(primary)} 구매 후 진행해주세요.`

@@ -309,11 +309,16 @@ export default function ColorAiPage() {
             </div>
 
             <div className="mt-5">
-              <div className="flex items-center justify-between"><h3 className="text-sm font-bold">목표 컬러</h3><span className="text-xs text-muted">{targetLevel}레벨 {selectedColor.name}</span></div>
+              <div className="flex items-center justify-between"><h3 className="text-sm font-bold">목표 컬러</h3><span className="text-xs text-muted">{selectedColor.name}</span></div>
               <div className="mt-3 flex flex-wrap gap-3">
-                {TARGET_COLORS.map((color) => <button key={color.name} type="button" aria-label={color.name} title={color.name} onClick={() => { setSelectedColor(color); setTargetLevel(color.level); }} style={{ backgroundColor: color.color }} className={`h-10 w-10 rounded-full ring-offset-2 ring-offset-surface ${selectedColor.name === color.name ? "ring-2 ring-rose-400" : ""}`} />)}
+                {TARGET_COLORS.map((color) => (
+                  <button key={color.name} type="button" onClick={() => setSelectedColor(color)} className="flex w-14 flex-col items-center gap-1">
+                    <span style={{ backgroundColor: color.color }} className={`h-10 w-10 rounded-full ring-offset-2 ring-offset-surface ${selectedColor.name === color.name ? "ring-2 ring-rose-400" : ""}`} />
+                    <span className={`text-center text-[10px] leading-3 ${selectedColor.name === color.name ? "font-bold text-rose-300" : "text-muted"}`}>{color.name}</span>
+                  </button>
+                ))}
               </div>
-              <div className="mt-4 flex items-center justify-between"><h3 className="text-sm font-bold">목표 레벨</h3><span className="text-xs text-muted">칸을 눌러 선택</span></div>
+              <div className="mt-4 flex items-center justify-between"><h3 className="text-sm font-bold">목표 레벨</h3><span className="text-xs text-muted">{targetLevel}레벨 · 칸을 눌러 선택</span></div>
               <LevelBar selected={targetLevel} markers={analysis ? [analysis.root, analysis.mid, analysis.end] : []} onSelect={setTargetLevel} />
             </div>
 

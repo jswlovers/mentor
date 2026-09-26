@@ -312,15 +312,15 @@ export default function ColorAiPage() {
 
             <div className="mt-5">
               <div className="flex items-center justify-between"><h3 className="text-sm font-bold">목표 컬러</h3><span className="text-xs text-muted">{selectedColor.name}</span></div>
-              <div className="mt-2 max-h-80 space-y-3 overflow-y-auto pr-1">
+              <div className="mt-2 space-y-2">
                 {TARGET_GROUPS.map((group) => (
                   <div key={group}>
-                    <p className="text-[11px] font-bold text-muted">{group}</p>
-                    <div className="mt-1.5 flex flex-wrap gap-2">
+                    <p className="text-[10px] font-bold text-muted">{group}</p>
+                    <div className="mt-1 flex flex-wrap gap-x-1 gap-y-1.5">
                       {TARGET_COLORS.filter((c) => c.group === group).map((color) => (
-                        <button key={color.name} type="button" onClick={() => setSelectedColor(color)} className="flex w-14 flex-col items-center gap-1">
-                          <span style={{ backgroundColor: color.color }} className={`h-9 w-9 rounded-full ring-1 ring-white/15 ring-offset-2 ring-offset-surface ${selectedColor.name === color.name ? "ring-2 ring-rose-400" : ""}`} />
-                          <span className={`text-center text-[10px] leading-3 ${selectedColor.name === color.name ? "font-bold text-rose-300" : "text-muted"}`}>{color.name}</span>
+                        <button key={color.name} type="button" onClick={() => setSelectedColor(color)} className="flex w-11 flex-col items-center gap-0.5">
+                          <span style={{ backgroundColor: color.color }} className={`h-7 w-7 rounded-full ring-1 ring-white/15 ring-offset-1 ring-offset-surface ${selectedColor.name === color.name ? "ring-2 ring-rose-400" : ""}`} />
+                          <span className={`text-center text-[9px] leading-[11px] tracking-tight ${selectedColor.name === color.name ? "font-bold text-rose-300" : "text-muted"}`}>{color.name}</span>
                         </button>
                       ))}
                     </div>

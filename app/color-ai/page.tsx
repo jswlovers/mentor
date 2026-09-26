@@ -16,12 +16,17 @@ type MixItem = { tube: string; grams: number; owned: boolean };
 type Formula = { mix: MixItem[]; developerPercent: number; ratio: string; timeMinutes: number; order: string; matchScore: number; notes: string[]; guide?: { title: string; steps: string[] } };
 type HistoryRow = { id: string; targetName: string; targetColor: string; formula: Formula; createdAt: string };
 
+type WhitePoint = { x: number; y: number };
+type Measured = Analysis & { whiteApplied: boolean; overExposed: boolean };
+
 // 사진 픽셀을 실제로 읽어 뿌리/중간/끝 3구간의 밝기(레벨)와 웜/쿨 언더톤을 계산한다.
-function analyzeImage(imageUrl: string): Promise<Analysis> {
+// 조명 영향 줄이기: ① 흰색 기준점을 찍으면 그 색이 흰색이 되도록 채널별로 보정(조명 색·밝기)
+// ② 가장자리 배경을 빼고 가운데 60%만 보고 ③ 반사광(가장 밝은 25%)과 그림자(가장 어두운 10%)를 빼고 평균낸다.
+function analyzeImage(imageUrl: string, white: WhitePoint | null): Promise<Measured> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
-      const w = 60, h = 90;
+      const w = 120, h = 180;
       const canvas = document.createElement("canvas");
       canvas.width = w;
       canvas.height = h;
@@ -34,18 +39,44 @@ function analyzeImage(imageUrl: string): Promise<Analysis> {
       } catch {
         return reject(new Error("사진을 분석할 수 없어요."));
       }
+      const px = (x: number, y: number) => {
+        const i = (y * w + x) * 4;
+        return [data[i], data[i + 1], data[i + 2]];
+      };
+
+      let gain = [1, 1, 1];
+      if (white) {
+        const cx = Math.round(white.x * (w - 1)), cy = Math.round(white.y * (h - 1));
+        const sum = [0, 0, 0];
+        let n = 0;
+        for (let y = Math.max(0, cy - 3); y <= Math.min(h - 1, cy + 3); y++)
+          for (let x = Math.max(0, cx - 3); x <= Math.min(w - 1, cx + 3); x++) {
+            const p = px(x, y);
+            sum[0] += p[0]; sum[1] += p[1]; sum[2] += p[2]; n++;
+          }
+        const ref = sum.map((v) => v / n);
+        if (Math.max(...ref) < 60) return reject(new Error("찍은 흰색 부분이 너무 어두워요. 흰 수건·종이·벽을 다시 찍어주세요."));
+        gain = ref.map((v) => Math.min(3, Math.max(0.4, 235 / Math.max(v, 1))));
+      }
+
       const bandHeight = Math.floor(h / 3);
+      let clipped = 0, total = 0;
       const bands = [0, bandHeight, bandHeight * 2].map((startY, i) => {
         const endY = i === 2 ? h : startY + bandHeight;
-        let r = 0, g = 0, b = 0, count = 0;
+        const list: { r: number; g: number; b: number; l: number }[] = [];
         for (let y = startY; y < endY; y++) {
-          for (let x = 0; x < w; x++) {
-            const idx = (y * w + x) * 4;
-            r += data[idx]; g += data[idx + 1]; b += data[idx + 2];
-            count++;
+          for (let x = Math.floor(w * 0.2); x < Math.ceil(w * 0.8); x++) {
+            const [r0, g0, b0] = px(x, y);
+            if (r0 >= 250 || g0 >= 250 || b0 >= 250) clipped++;
+            total++;
+            const r = Math.min(255, r0 * gain[0]), g = Math.min(255, g0 * gain[1]), b = Math.min(255, b0 * gain[2]);
+            list.push({ r, g, b, l: 0.2126 * r + 0.7152 * g + 0.0722 * b });
           }
         }
-        return { r: r / count, g: g / count, b: b / count };
+        list.sort((p, q) => p.l - q.l);
+        const kept = list.slice(Math.floor(list.length * 0.1), Math.max(Math.floor(list.length * 0.1) + 1, Math.floor(list.length * 0.75)));
+        const avg = kept.reduce((acc, p) => ({ r: acc.r + p.r, g: acc.g + p.g, b: acc.b + p.b }), { r: 0, g: 0, b: 0 });
+        return { r: avg.r / kept.length, g: avg.g / kept.length, b: avg.b / kept.length };
       });
       // 밝기를 명도 차트(1~20레벨)의 모발 색과 비교해 레벨을 정한다.
       const toLevel = ({ r, g, b }: { r: number; g: number; b: number }) => levelFromRgb(r, g, b);
@@ -53,12 +84,33 @@ function analyzeImage(imageUrl: string): Promise<Analysis> {
       const avg = { r: (rootBand.r + midBand.r + endBand.r) / 3, g: (rootBand.g + midBand.g + endBand.g) / 3, b: (rootBand.b + midBand.b + endBand.b) / 3 };
       const warmth = (avg.r - avg.b) / 255;
       const undertone = warmth > 0.08 ? "warm" : warmth < -0.02 ? "cool" : "neutral";
-      resolve({ root: toLevel(rootBand), mid: toLevel(midBand), end: toLevel(endBand), undertone });
+      resolve({ root: toLevel(rootBand), mid: toLevel(midBand), end: toLevel(endBand), undertone, whiteApplied: !!white, overExposed: clipped / total > 0.15 });
     };
     img.onerror = () => reject(new Error("사진을 불러오지 못했어요."));
     img.src = imageUrl;
   });
 }
+
+// 매장 조명 보정값(레벨). 같은 조명에서 찍은 사진에 계속 적용되도록 이 기기에 저장한다.
+const LIGHT_KEY = "colorfit.lightOffset";
+function readLightOffset(): number {
+  if (typeof window === "undefined") return 0;
+  try {
+    const v = Number(window.localStorage.getItem(LIGHT_KEY));
+    return Number.isFinite(v) ? Math.max(-6, Math.min(6, Math.round(v))) : 0;
+  } catch {
+    return 0;
+  }
+}
+function writeLightOffset(v: number) {
+  try {
+    if (v === 0) window.localStorage.removeItem(LIGHT_KEY);
+    else window.localStorage.setItem(LIGHT_KEY, String(v));
+  } catch {
+    // 저장이 막힌 브라우저에서는 이번 화면에서만 적용된다.
+  }
+}
+const clampLevel = (n: number) => Math.max(1, Math.min(20, n));
 
 type PickerShade = DyeShade & { lineName: string };
 
@@ -165,7 +217,24 @@ export default function ColorAiPage() {
   const visibleLines = brand.lines.filter((l) => lineId === "all" || l.id === lineId);
   const [thickness, setThickness] = useState("보통모");
   const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [analysis, setAnalysis] = useState<Analysis | null>(null);
+  const [measured, setMeasured] = useState<Measured | null>(null);
+  const [adjust, setAdjust] = useState<[number, number, number]>([0, 0, 0]);
+  const [lightOffset, setLightOffset] = useState<number>(readLightOffset);
+  const [whitePoint, setWhitePoint] = useState<WhitePoint | null>(null);
+  const [pickingWhite, setPickingWhite] = useState(false);
+  // 추천·차트·필터에 쓰는 레벨 = 사진 측정값 + 매장 조명 보정 + 부위별 수동 보정.
+  const analysis = useMemo<Analysis | null>(
+    () =>
+      measured
+        ? {
+            root: clampLevel(measured.root + lightOffset + adjust[0]),
+            mid: clampLevel(measured.mid + lightOffset + adjust[1]),
+            end: clampLevel(measured.end + lightOffset + adjust[2]),
+            undertone: measured.undertone,
+          }
+        : null,
+    [measured, lightOffset, adjust],
+  );
   const [analyzing, setAnalyzing] = useState(false);
   const [recommending, setRecommending] = useState(false);
   const [formula, setFormula] = useState<Formula | null>(null);
@@ -192,12 +261,15 @@ export default function ColorAiPage() {
     const file = event.target.files?.[0];
     if (!file) return;
     setImageUrl(URL.createObjectURL(file));
-    setAnalysis(null);
+    setMeasured(null);
+    setAdjust([0, 0, 0]);
+    setWhitePoint(null);
+    setPickingWhite(false);
     setFormula(null);
     setMessage("");
   };
 
-  const runAnalysis = async () => {
+  const runAnalysis = async (white: WhitePoint | null = whitePoint) => {
     if (!imageUrl) {
       setMessage("먼저 모발 사진을 선택해 주세요.");
       return;
@@ -205,15 +277,56 @@ export default function ColorAiPage() {
     setAnalyzing(true);
     setMessage("");
     try {
-      const result = await analyzeImage(imageUrl);
-      setAnalysis(result);
+      const result = await analyzeImage(imageUrl, white);
+      setMeasured(result);
+      setAdjust([0, 0, 0]);
       setFormula(null);
-      setMessage("모발 분석이 완료되었습니다.");
+      setMessage(
+        result.overExposed
+          ? "조명이 강해 하얗게 날아간 부분이 많아요. 조명을 줄이거나 흰색 기준을 찍고, 레벨을 −/+로 확인해 주세요."
+          : "모발 분석이 완료되었습니다. 실제와 다르면 레벨을 −/+로 맞춰 주세요.",
+      );
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "분석에 실패했어요.");
     } finally {
       setAnalyzing(false);
     }
+  };
+
+  // 흰색 기준 찍기: 사진은 object-contain으로 보여주므로 실제 사진 영역 안의 위치(0~1)로 바꾼다.
+  const pickWhite = (event: React.MouseEvent<HTMLImageElement>) => {
+    const el = event.currentTarget;
+    const rect = el.getBoundingClientRect();
+    const scale = Math.min(rect.width / el.naturalWidth, rect.height / el.naturalHeight);
+    const dw = el.naturalWidth * scale, dh = el.naturalHeight * scale;
+    const x = (event.clientX - rect.left - (rect.width - dw) / 2) / dw;
+    const y = (event.clientY - rect.top - (rect.height - dh) / 2) / dh;
+    if (x < 0 || x > 1 || y < 0 || y > 1) return;
+    const point = { x, y };
+    setWhitePoint(point);
+    setPickingWhite(false);
+    runAnalysis(point);
+  };
+
+  const nudge = (index: number, delta: number) => {
+    setAdjust((prev) => prev.map((v, i) => (i === index ? v + delta : v)) as [number, number, number]);
+    setFormula(null);
+  };
+
+  // 지금 맞춘 부위별 보정의 평균을 매장 조명 보정값으로 저장한다(다음 사진부터 자동 적용).
+  const rememberLighting = () => {
+    const shift = Math.round((adjust[0] + adjust[1] + adjust[2]) / 3);
+    const next = Math.max(-6, Math.min(6, lightOffset + shift));
+    setLightOffset(next);
+    writeLightOffset(next);
+    setAdjust((prev) => prev.map((v) => v - shift) as [number, number, number]);
+    setMessage(`이 조명 보정(${next > 0 ? "+" : ""}${next}레벨)을 저장했어요. 같은 조명에서 찍은 사진에 자동으로 적용돼요.`);
+  };
+
+  const resetLighting = () => {
+    setLightOffset(0);
+    writeLightOffset(0);
+    setMessage("조명 보정을 초기화했어요.");
   };
 
   const createRecommendation = async () => {
@@ -274,26 +387,52 @@ export default function ColorAiPage() {
               <span className="text-xs text-muted">뿌리부터 끝까지 촬영</span>
             </div>
             <div className="relative mt-4 flex min-h-56 flex-col items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-black/30 text-center">
-              {imageUrl ? <img src={imageUrl} alt="선택한 모발 사진" className="absolute inset-0 h-full w-full object-cover opacity-75" /> : null}
-              <div className="relative z-[1] px-5">
+              {imageUrl && pickingWhite ? (
+                <>
+                  <img src={imageUrl} alt="흰색 기준을 찍을 사진" onClick={pickWhite} className="absolute inset-0 z-[2] h-full w-full cursor-crosshair object-contain" />
+                  <p className="pointer-events-none absolute left-2 right-2 top-2 z-[3] rounded-lg bg-black/70 px-3 py-1.5 text-[11px] font-semibold text-white">사진 속 흰 수건·종이·벽을 눌러주세요</p>
+                </>
+              ) : imageUrl ? (
+                <img src={imageUrl} alt="선택한 모발 사진" className="absolute inset-0 h-full w-full object-cover opacity-75" />
+              ) : null}
+              <div className={`relative z-[1] px-5 ${pickingWhite ? "invisible" : ""}`}>
                 <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-rose-500/20 text-2xl">◎</div>
                 <p className="mt-3 font-semibold">{imageUrl ? "사진을 확인하고 분석해 주세요" : "모발 사진을 선택해 주세요"}</p>
-                <p className="mt-1 text-xs leading-5 text-muted">자연광에서 모발 전체가 보이는 사진이 좋아요.</p>
+                <p className="mt-1 text-xs leading-5 text-muted">자연광에서 모발 전체가 보이게, 흰 수건이나 종이를 함께 찍으면 조명 보정이 정확해져요.</p>
                 <div className="mt-4 flex flex-col gap-2 sm:flex-row">
                   <label className="cursor-pointer rounded-lg bg-rose-500 px-4 py-2 text-sm font-bold text-white hover:bg-rose-400">
                     사진 선택
                     <input type="file" accept="image/*" onChange={selectPhoto} className="sr-only" />
                   </label>
-                  <button type="button" onClick={runAnalysis} disabled={analyzing || !imageUrl} className="rounded-lg border border-white/20 px-4 py-2 text-sm font-bold text-foreground disabled:opacity-50">
+                  <button type="button" onClick={() => runAnalysis()} disabled={analyzing || !imageUrl} className="rounded-lg border border-white/20 px-4 py-2 text-sm font-bold text-foreground disabled:opacity-50">
                     {analyzing ? "분석 중..." : analysis ? "다시 분석" : "사진 분석"}
                   </button>
                 </div>
               </div>
             </div>
+            {imageUrl ? (
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
+                <button type="button" onClick={() => setPickingWhite((v) => !v)} className="rounded-full border border-border px-2.5 py-1 font-semibold text-muted hover:text-foreground">
+                  {pickingWhite ? "흰색 찍기 취소" : whitePoint ? "흰색 기준 다시 찍기" : "흰색 기준 찍기 (조명 보정)"}
+                </button>
+                {whitePoint ? (
+                  <button type="button" onClick={() => { setWhitePoint(null); runAnalysis(null); }} className="rounded-full border border-border px-2.5 py-1 text-muted hover:text-foreground">흰색 기준 해제</button>
+                ) : null}
+                {measured?.whiteApplied ? <span className="text-emerald-300">흰색 기준 보정 적용됨</span> : null}
+              </div>
+            ) : null}
             <div className="mt-3 grid grid-cols-3 gap-2">
               {(["뿌리", "중간", "끝"] as const).map((zone, index) => (
                 <div key={zone} className="rounded-lg bg-white/5 px-2 py-2.5">
-                  <span className="block text-[11px] text-muted">{zone}</span>
+                  <span className="flex items-center justify-between text-[11px] text-muted">
+                    {zone}
+                    {measured ? (
+                      <span className="flex gap-1">
+                        <button type="button" aria-label={`${zone} 레벨 낮추기`} onClick={() => nudge(index, -1)} className="h-5 w-5 rounded bg-white/10 text-xs leading-5 text-foreground">−</button>
+                        <button type="button" aria-label={`${zone} 레벨 높이기`} onClick={() => nudge(index, 1)} className="h-5 w-5 rounded bg-white/10 text-xs leading-5 text-foreground">+</button>
+                      </span>
+                    ) : null}
+                  </span>
                   <strong className="mt-1 flex items-center gap-1.5 text-sm">
                     {analysis ? <span className="h-3 w-3 shrink-0 rounded-sm ring-1 ring-white/20" style={{ backgroundColor: levelColor([analysis.root, analysis.mid, analysis.end][index]) }} /> : null}
                     {analysis ? `${[analysis.root, analysis.mid, analysis.end][index]} 레벨` : "분석 대기"}
@@ -301,6 +440,13 @@ export default function ColorAiPage() {
                 </div>
               ))}
             </div>
+            {measured ? (
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-muted">
+                <span>조명 보정 {lightOffset > 0 ? "+" : ""}{lightOffset}레벨{adjust.some((v) => v !== 0) ? ` · 수동 ${adjust.map((v) => (v > 0 ? `+${v}` : v)).join("/")}` : ""}</span>
+                {adjust.some((v) => v !== 0) ? <button type="button" onClick={rememberLighting} className="rounded-full bg-rose-500/15 px-2.5 py-1 font-semibold text-rose-300">이 조명 기억하기</button> : null}
+                {lightOffset !== 0 ? <button type="button" onClick={resetLighting} className="rounded-full border border-border px-2.5 py-1 hover:text-foreground">조명 보정 초기화</button> : null}
+              </div>
+            ) : null}
             <p className="mt-3 text-[11px] text-muted">명도 차트 (밀본 올디브 레벨 스케일 기준){analysis ? " · 흰 테두리가 현재 모발 레벨" : ""}</p>
             <LevelBar markers={analysis ? [analysis.root, analysis.mid, analysis.end] : []} />
             {analysis ? <p className="mt-2 text-center text-[11px] text-muted">언더톤 · {UNDERTONE_LABEL[analysis.undertone]}</p> : null}

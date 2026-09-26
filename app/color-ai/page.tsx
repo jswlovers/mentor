@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { ChangeEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api, jsonInit, timeAgo, useMe } from "@/lib/client";
-import { DYE_BRANDS, FAMILY_LABEL, TARGET_COLORS, findShade, type DyeShade, type TargetColor, type ToneFamily } from "@/lib/colorTargets";
+import { DYE_BRANDS, FAMILY_LABEL, TARGET_COLORS, correctionFamilies, findShade, supportFamilies, type DyeShade, type TargetColor, type ToneFamily } from "@/lib/colorTargets";
 import { LEVEL_CHART, levelColor, levelFromRgb } from "@/lib/levelChart";
 import ColorQna from "./ColorQna";
 
@@ -109,7 +109,8 @@ function TubePicker({ brandId, lineId, target, targetLevel, selected, onToggle, 
       .sort((a, b) => (b.level ?? -1) - (a.level ?? -1));
   }, [brandId, lineId]);
   const main: readonly ToneFamily[] = target.families;
-  const supports: readonly ToneFamily[] = target.supports;
+  const supports = supportFamilies(target, targetLevel);
+  const correctors = correctionFamilies(target, targetLevel);
   if (showAll) {
     const families = Object.keys(FAMILY_LABEL) as ToneFamily[];
     return (
@@ -134,6 +135,7 @@ function TubePicker({ brandId, lineId, target, targetLevel, selected, onToggle, 
       <p className="mt-3 text-xs font-bold text-rose-300">메인 톤 · {main.map((f) => FAMILY_LABEL[f]).join(", ")} · {targetLevel}±1레벨</p>
       <ShadeChips shades={mainList} selected={selected} onToggle={onToggle} />
       <p className="mt-4 text-xs font-bold text-muted">보정·베이스용 · {supports.map((f) => FAMILY_LABEL[f]).join(", ")} · {targetLevel}±2레벨</p>
+      {correctors.length ? <p className="mt-1 text-[10px] leading-4 text-muted">보색 중화: {targetLevel}레벨에서 드러나는 잔류 색소를 지우는 {correctors.map((f) => FAMILY_LABEL[f]).join(", ")} 계열을 포함했어요.</p> : null}
       <ShadeChips shades={supportList} selected={selected} onToggle={onToggle} />
     </div>
   );

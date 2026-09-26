@@ -3,11 +3,12 @@
 // 염모제는 브랜드별 카탈로그(lib/dyeCatalog.ts)의 넘버 id로 받는다.
 import { db } from "./db";
 import { harmonyNotes } from "../colorHarmony";
+import { HUE_LABEL, complement, underlyingPigment } from "../colorWheel";
 import {
-  COOL_FAMILIES,
   FAMILY_LABEL,
   TARGET_COLORS,
   byLevelDistance,
+  correctionFamilies,
   findBrand,
   findShade,
   findTarget,
@@ -98,17 +99,33 @@ export function computeRecommendation(input: RecommendInput): Formula {
     notes.push(`목표 ${targetLevel}레벨과 보유 넘버(${primary.shade.code}) 레벨 차이가 커서 발색이 달라질 수 있어요.`);
   }
 
-  // 2) 보정: 웜 언더톤(잔류 오렌지)인데 목표가 차가운 계열이 아니면, 목표에 어울리는 쿨 계열 보유 넘버로 중화.
+  // 2) 보정(보색 원리): 목표 레벨에서 드러나는 잔류 색소를 색상환의 보색 계열로 지운다.
+  //    밝히면 목표 레벨의 잔류 색소가, 어둡게·같은 레벨이면 지금 모발의 잔류 색소가 결과에 남는다.
   let secondary: ShadeRef | undefined;
-  const targetIsCool = COOL_FAMILIES.includes(mainFamilies[0]);
-  if (input.undertone === "warm" && !targetIsCool) {
-    const correctors = (target.supports as readonly ToneFamily[]).filter((f) => COOL_FAMILIES.includes(f));
+  const exposedLevel = levelGap > 0 ? targetLevel : currentLevel;
+  const pigment = underlyingPigment(exposedLevel);
+  const pigmentName = HUE_LABEL[pigment];
+  const compName = HUE_LABEL[complement(pigment)];
+  const correctors = correctionFamilies(target, exposedLevel);
+  if (target.warm) {
+    // 난색 목표: 잔류 색소(레드~옐로우)가 같은 난색이라 발색을 도와준다. 쿨 잔류(애쉬)는 반대로 난색을 탁하게 만든다.
+    if (levelGap > 0) notes.push(`${targetLevel}레벨에서 드러나는 ${pigmentName} 잔류 색소는 목표(${target.name})와 같은 난색이라 따로 중화하지 않았어요.`);
+    if (input.undertone === "cool") {
+      matchScore -= 4;
+      notes.push(`모발에 애쉬(쿨) 잔류가 보여요. 쿨 톤은 난색의 보색 쪽이라 발색을 탁하게 만들 수 있으니 방치 시간을 충분히 두세요.`);
+    }
+  } else if (target.hue && correctors.some((f) => (target.families as readonly ToneFamily[]).includes(f))) {
+    // 목표 색 자체가 잔류 색소의 보색이면(예: 옐로우 잔류 + 바이올렛 목표) 메인 톤이 중화까지 해준다.
+    notes.push(`${pigmentName} 잔류 색소의 보색이 목표 톤(${target.name})이라, 메인 배합이 중화까지 해줘요.`);
+  } else if (input.undertone === "cool" && levelGap <= 0) {
+    notes.push(`이미 쿨 톤이 보이고 밝히지 않는 시술이라 보색 보정은 넣지 않았어요.`);
+  } else {
     secondary = nearest(owned.filter((r) => correctors.includes(r.shade.family) && r !== primary), targetLevel);
     if (secondary) {
-      notes.push(`잔류 오렌지가 감지되어 ${shadeLabel(secondary)}를 추가해 중화했어요.`);
-    } else if (correctors.length) {
+      notes.push(`보색 중화: ${exposedLevel}레벨에서 드러나는 ${pigmentName} 잔류 색소를 보색인 ${compName} 계열 ${shadeLabel(secondary)}로 지웠어요.`);
+    } else {
       matchScore -= 6;
-      notes.push(`잔류 오렌지가 감지됐지만 중화용 ${familyNames(correctors)} 계열 보유가 없어 배합에 반영하지 못했어요.`);
+      notes.push(`${pigmentName} 잔류 색소를 지울 보색(${compName}) 계열 ${familyNames(correctors)} 넘버가 보유 목록에 없어요. 있으면 20~30% 섞어주세요.`);
     }
   }
 

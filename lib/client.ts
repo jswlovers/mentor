@@ -14,6 +14,7 @@ export type Me = {
   phone: string | null;
   phoneVerified: boolean;
   notifyKakao: boolean;
+  position: string | null;
 };
 
 // 세션 쿠키(HttpOnly)로 인증하므로 fetch가 쿠키를 자동으로 보낸다.

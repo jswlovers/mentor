@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { ChangeEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api, jsonInit, timeAgo, useMe } from "@/lib/client";
-import { DYE_BRANDS, FAMILY_LABEL, TARGET_COLORS, correctionFamilies, findShade, supportFamilies, type DyeShade, type TargetColor, type ToneFamily } from "@/lib/colorTargets";
+import { DYE_BRANDS, FAMILY_LABEL, TARGET_COLORS, TARGET_GROUPS, correctionFamilies, findShade, supportFamilies, type DyeShade, type TargetColor, type ToneFamily } from "@/lib/colorTargets";
 import { LEVEL_CHART, levelColor, levelFromRgb } from "@/lib/levelChart";
 import ColorQna from "./ColorQna";
 
@@ -312,12 +312,19 @@ export default function ColorAiPage() {
 
             <div className="mt-5">
               <div className="flex items-center justify-between"><h3 className="text-sm font-bold">목표 컬러</h3><span className="text-xs text-muted">{selectedColor.name}</span></div>
-              <div className="mt-3 flex flex-wrap gap-3">
-                {TARGET_COLORS.map((color) => (
-                  <button key={color.name} type="button" onClick={() => setSelectedColor(color)} className="flex w-14 flex-col items-center gap-1">
-                    <span style={{ backgroundColor: color.color }} className={`h-10 w-10 rounded-full ring-offset-2 ring-offset-surface ${selectedColor.name === color.name ? "ring-2 ring-rose-400" : ""}`} />
-                    <span className={`text-center text-[10px] leading-3 ${selectedColor.name === color.name ? "font-bold text-rose-300" : "text-muted"}`}>{color.name}</span>
-                  </button>
+              <div className="mt-2 max-h-80 space-y-3 overflow-y-auto pr-1">
+                {TARGET_GROUPS.map((group) => (
+                  <div key={group}>
+                    <p className="text-[11px] font-bold text-muted">{group}</p>
+                    <div className="mt-1.5 flex flex-wrap gap-2">
+                      {TARGET_COLORS.filter((c) => c.group === group).map((color) => (
+                        <button key={color.name} type="button" onClick={() => setSelectedColor(color)} className="flex w-14 flex-col items-center gap-1">
+                          <span style={{ backgroundColor: color.color }} className={`h-9 w-9 rounded-full ring-1 ring-white/15 ring-offset-2 ring-offset-surface ${selectedColor.name === color.name ? "ring-2 ring-rose-400" : ""}`} />
+                          <span className={`text-center text-[10px] leading-3 ${selectedColor.name === color.name ? "font-bold text-rose-300" : "text-muted"}`}>{color.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 ))}
               </div>
               <div className="mt-4 flex items-center justify-between"><h3 className="text-sm font-bold">목표 레벨</h3><span className="text-xs text-muted">{targetLevel}레벨 · 칸을 눌러 선택</span></div>

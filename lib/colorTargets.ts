@@ -25,20 +25,54 @@ export const FAMILY_LABEL: Record<ToneFamily, string> = {
 // 목표와 상관없는 계열(예: 레드 목표인데 그레이)은 둘 다에 넣지 않아 화면에서 보이지 않는다.
 // hue: 색상환 위치(무채색·브라운 계열은 null). warm: 난색 목표면 밝혔을 때 드러나는 잔류 색소를 살리고 중화하지 않는다.
 export const TARGET_COLORS = [
-  { name: "로즈 브라운", level: 8, color: "#a95f5d", families: ["pink"], supports: ["red", "violet", "natural", "clear"], hue: "red-violet", warm: true },
-  { name: "레드", level: 7, color: "#9b2d30", families: ["red"], supports: ["pink", "natural", "clear"], hue: "red", warm: true },
-  { name: "핑크", level: 9, color: "#c9798e", families: ["pink"], supports: ["violet", "clear"], hue: "red-violet", warm: true },
-  { name: "오렌지 카퍼", level: 8, color: "#b8622f", families: ["orange"], supports: ["gold", "red", "natural", "clear"], hue: "orange", warm: true },
-  { name: "골드 베이지", level: 9, color: "#bf9a6a", families: ["gold", "beige"], supports: ["natural", "clear"], hue: "yellow-orange", warm: true },
-  { name: "코코아 브라운", level: 7, color: "#765047", families: ["natural", "beige"], supports: ["matte", "ash", "clear"], hue: null, warm: false },
-  { name: "애쉬 베이지", level: 9, color: "#a69888", families: ["ash", "beige"], supports: ["gray", "violet", "blue", "clear"], hue: null, warm: false },
-  { name: "그레이", level: 9, color: "#8d8d91", families: ["gray", "ash"], supports: ["violet", "blue", "clear"], hue: null, warm: false },
-  { name: "카키 브라운", level: 8, color: "#777358", families: ["matte"], supports: ["ash", "natural", "clear"], hue: "yellow-green", warm: false },
-  { name: "바이올렛", level: 7, color: "#69536f", families: ["violet"], supports: ["blue", "pink", "clear"], hue: "violet", warm: false },
-  { name: "블루 블랙", level: 4, color: "#283247", families: ["blue"], supports: ["ash", "natural", "clear"], hue: "blue", warm: false },
-] as const satisfies readonly { name: string; level: number; color: string; families: readonly ToneFamily[]; supports: readonly ToneFamily[]; hue: WheelHue | null; warm: boolean }[];
+  { group: "브라운", name: "내추럴 브라운", level: 6, color: "#5a4033", families: ["natural"], supports: ["beige", "clear"], hue: null, warm: false },
+  { group: "브라운", name: "초코 브라운", level: 5, color: "#4a3024", families: ["natural", "beige"], supports: ["matte", "ash", "clear"], hue: null, warm: false },
+  { group: "브라운", name: "코코아 브라운", level: 7, color: "#765047", families: ["natural", "beige"], supports: ["matte", "ash", "clear"], hue: null, warm: false },
+  { group: "브라운", name: "모카 브라운", level: 7, color: "#6d5446", families: ["beige"], supports: ["natural", "ash", "clear"], hue: null, warm: false },
+  { group: "브라운", name: "밀크티 브라운", level: 9, color: "#9c7c64", families: ["beige", "natural"], supports: ["ash", "violet", "clear"], hue: null, warm: false },
+  { group: "브라운", name: "카키 브라운", level: 8, color: "#777358", families: ["matte"], supports: ["ash", "natural", "clear"], hue: "yellow-green", warm: false },
+  { group: "브라운", name: "올리브 브라운", level: 7, color: "#5f5b3e", families: ["matte"], supports: ["ash", "natural", "clear"], hue: "yellow-green", warm: false },
+  { group: "애쉬·무채색", name: "애쉬 브라운", level: 7, color: "#6b625c", families: ["ash"], supports: ["natural", "violet", "blue", "clear"], hue: null, warm: false },
+  { group: "애쉬·무채색", name: "애쉬 베이지", level: 9, color: "#a69888", families: ["ash", "beige"], supports: ["gray", "violet", "blue", "clear"], hue: null, warm: false },
+  { group: "애쉬·무채색", name: "애쉬 그레이", level: 10, color: "#7d7f84", families: ["ash", "gray"], supports: ["violet", "blue", "clear"], hue: null, warm: false },
+  { group: "애쉬·무채색", name: "그레이", level: 9, color: "#8d8d91", families: ["gray", "ash"], supports: ["violet", "blue", "clear"], hue: null, warm: false },
+  { group: "애쉬·무채색", name: "그레이지", level: 11, color: "#9a938a", families: ["gray", "beige"], supports: ["ash", "violet", "clear"], hue: null, warm: false },
+  { group: "애쉬·무채색", name: "실버", level: 16, color: "#b9bbc0", families: ["gray"], supports: ["violet", "ash", "clear"], hue: null, warm: false },
+  { group: "애쉬·무채색", name: "블랙", level: 3, color: "#1c1c20", families: ["natural"], supports: ["blue", "clear"], hue: null, warm: false },
+  { group: "애쉬·무채색", name: "블루 블랙", level: 4, color: "#283247", families: ["blue"], supports: ["ash", "natural", "clear"], hue: "blue", warm: false },
+  { group: "베이지·골드", name: "샌드 베이지", level: 11, color: "#b39f84", families: ["beige"], supports: ["gold", "ash", "clear"], hue: null, warm: false },
+  { group: "베이지·골드", name: "골드 베이지", level: 9, color: "#bf9a6a", families: ["gold", "beige"], supports: ["natural", "clear"], hue: "yellow-orange", warm: true },
+  { group: "베이지·골드", name: "허니 브라운", level: 9, color: "#a0703a", families: ["gold", "natural"], supports: ["orange", "clear"], hue: "yellow-orange", warm: true },
+  { group: "베이지·골드", name: "샴페인 골드", level: 14, color: "#d8c08e", families: ["gold", "beige"], supports: ["clear"], hue: "yellow", warm: true },
+  { group: "베이지·골드", name: "옐로우 블론드", level: 16, color: "#e0c86a", families: ["gold"], supports: ["clear"], hue: "yellow", warm: true },
+  { group: "오렌지·카퍼", name: "오렌지 브라운", level: 8, color: "#9a5a34", families: ["orange", "natural"], supports: ["gold", "red", "clear"], hue: "orange", warm: true },
+  { group: "오렌지·카퍼", name: "오렌지 카퍼", level: 8, color: "#b8622f", families: ["orange"], supports: ["gold", "red", "natural", "clear"], hue: "orange", warm: true },
+  { group: "오렌지·카퍼", name: "테라코타", level: 8, color: "#a4513a", families: ["orange", "red"], supports: ["natural", "clear"], hue: "red-orange", warm: true },
+  { group: "오렌지·카퍼", name: "코랄 오렌지", level: 11, color: "#d9785a", families: ["orange", "pink"], supports: ["gold", "clear"], hue: "red-orange", warm: true },
+  { group: "레드·핑크", name: "레드", level: 7, color: "#9b2d30", families: ["red"], supports: ["pink", "natural", "clear"], hue: "red", warm: true },
+  { group: "레드·핑크", name: "체리 레드", level: 6, color: "#8a1f35", families: ["red", "pink"], supports: ["violet", "natural", "clear"], hue: "red", warm: true },
+  { group: "레드·핑크", name: "와인 레드", level: 5, color: "#6a2034", families: ["red", "violet"], supports: ["pink", "natural", "clear"], hue: "red-violet", warm: true },
+  { group: "레드·핑크", name: "버건디", level: 4, color: "#5c1f2e", families: ["red", "violet"], supports: ["natural", "clear"], hue: "red-violet", warm: true },
+  { group: "레드·핑크", name: "로즈 브라운", level: 8, color: "#a95f5d", families: ["pink"], supports: ["red", "violet", "natural", "clear"], hue: "red-violet", warm: true },
+  { group: "레드·핑크", name: "핑크 베이지", level: 11, color: "#c49a8e", families: ["pink", "beige"], supports: ["violet", "clear"], hue: "red-violet", warm: true },
+  { group: "레드·핑크", name: "코랄 핑크", level: 11, color: "#d97b72", families: ["pink", "orange"], supports: ["clear"], hue: "red", warm: true },
+  { group: "레드·핑크", name: "핑크", level: 9, color: "#c9798e", families: ["pink"], supports: ["violet", "clear"], hue: "red-violet", warm: true },
+  { group: "레드·핑크", name: "마젠타", level: 8, color: "#b0306e", families: ["pink", "violet"], supports: ["red", "clear"], hue: "red-violet", warm: true },
+  { group: "퍼플", name: "바이올렛", level: 7, color: "#69536f", families: ["violet"], supports: ["blue", "pink", "clear"], hue: "violet", warm: false },
+  { group: "퍼플", name: "라벤더", level: 15, color: "#a996c6", families: ["violet"], supports: ["pink", "blue", "gray", "clear"], hue: "violet", warm: false },
+  { group: "퍼플", name: "모브", level: 10, color: "#8e7280", families: ["violet", "pink"], supports: ["gray", "ash", "clear"], hue: "red-violet", warm: false },
+  { group: "퍼플", name: "플럼", level: 5, color: "#5b2e45", families: ["violet", "red"], supports: ["natural", "clear"], hue: "red-violet", warm: true },
+  { group: "블루·그린", name: "네이비", level: 5, color: "#26304f", families: ["blue"], supports: ["ash", "violet", "clear"], hue: "blue", warm: false },
+  { group: "블루·그린", name: "블루", level: 12, color: "#3a5ea8", families: ["blue"], supports: ["ash", "violet", "clear"], hue: "blue", warm: false },
+  { group: "블루·그린", name: "틸 블루", level: 9, color: "#2c7c80", families: ["blue", "matte"], supports: ["ash", "clear"], hue: "blue-green", warm: false },
+  { group: "블루·그린", name: "에메랄드 그린", level: 8, color: "#1f6b58", families: ["matte"], supports: ["blue", "clear"], hue: "green", warm: false },
+  { group: "블루·그린", name: "민트", level: 16, color: "#86c2b0", families: ["matte", "blue"], supports: ["ash", "clear"], hue: "blue-green", warm: false },
+] as const satisfies readonly { group: string; name: string; level: number; color: string; families: readonly ToneFamily[]; supports: readonly ToneFamily[]; hue: WheelHue | null; warm: boolean }[];
 
 export type TargetColor = (typeof TARGET_COLORS)[number];
+
+// 화면에서 목표 컬러를 계열별로 묶어 보여줄 순서.
+export const TARGET_GROUPS: string[] = [...new Set<string>(TARGET_COLORS.map((c) => c.group))];
 
 // 목표 레벨에서 드러나는 잔류 색소를 지울 보색 계열. 난색 목표는 잔류 색소가 오히려 도움이 되므로 중화하지 않는다.
 export function correctionFamilies(target: TargetColor, level: number): readonly ToneFamily[] {

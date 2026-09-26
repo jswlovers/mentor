@@ -1,6 +1,7 @@
 // 컬러핏 AI: 실제 업로드 사진(캔버스 픽셀 분석)에서 나온 레벨·언더톤을 받아
 // 규칙 기반으로 염모제 배합을 계산한다. 외부 AI API는 쓰지 않는다.
 import { db } from "./db";
+import { harmonyNotes } from "../colorHarmony";
 
 export type Undertone = "warm" | "cool" | "neutral";
 
@@ -146,6 +147,8 @@ export function computeRecommendation(input: RecommendInput): Formula {
   if (history.includes("흑염색 이력")) matchScore -= 5;
 
   const order = input.endLevel - input.rootLevel >= 2 ? "중간 → 뿌리 순으로 도포 (끝은 처리 시간을 짧게)" : "전체 동시 도포";
+
+  notes.push(...harmonyNotes(target.name));
 
   notes.push("AI 추천은 보조 정보이며 실제 모발 상태에 따른 디자이너의 최종 판단이 필요합니다.");
 

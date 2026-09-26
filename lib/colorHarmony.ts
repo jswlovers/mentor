@@ -96,6 +96,14 @@ const TARGET_HARMONY: Record<string, { family: string; picks: [string, string][]
     family: "빨강 계열",
     picks: [["red", "여성적 · 화려함"], ["red", "여성적 · 엘레강스"], ["red", "대담 · 격렬하다"]],
   },
+  "레드": {
+    family: "빨강 계열",
+    picks: [["red", "대담 · 격렬하다"], ["red", "활기 · 즐겁다"]],
+  },
+  "핑크": {
+    family: "핑크 계열",
+    picks: [["red", "여성적 · 화려함"], ["red", "여성적 · 엘레강스"]],
+  },
   "바이올렛": {
     family: "보라 계열",
     picks: [["red", "여성적 · 엘레강스"]],

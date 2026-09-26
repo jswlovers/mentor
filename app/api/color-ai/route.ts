@@ -41,7 +41,7 @@ export async function POST(req: Request) {
   }
 
   const body = await req.json().catch(() => ({}));
-  const { rootLevel, midLevel, endLevel, undertone, targetName, history, tubes, thickness } = body ?? {};
+  const { rootLevel, midLevel, endLevel, undertone, targetName, history, brandId, tubes, thickness } = body ?? {};
 
   if (!isLevel(rootLevel) || !isLevel(midLevel) || !isLevel(endLevel)) {
     return Response.json({ error: "모발 사진을 먼저 분석해주세요" }, { status: 400 });
@@ -55,7 +55,7 @@ export async function POST(req: Request) {
   if (!Array.isArray(history) || history.some((h) => typeof h !== "string")) {
     return Response.json({ error: "시술 이력이 올바르지 않아요" }, { status: 400 });
   }
-  if (!Array.isArray(tubes) || tubes.some((t) => typeof t !== "string")) {
+  if (!Array.isArray(tubes) || tubes.length > 300 || tubes.some((t) => typeof t !== "string")) {
     return Response.json({ error: "보유 염모제가 올바르지 않아요" }, { status: 400 });
   }
 
@@ -66,6 +66,7 @@ export async function POST(req: Request) {
     undertone: undertone as Undertone,
     targetName,
     history,
+    brandId: typeof brandId === "string" ? brandId : undefined,
     tubes,
     thickness: typeof thickness === "string" ? thickness : undefined,
   };

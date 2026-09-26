@@ -1,46 +1,26 @@
 // 컬러핏 AI: 실제 업로드 사진(캔버스 픽셀 분석)에서 나온 레벨·언더톤을 받아
 // 규칙 기반으로 염모제 배합을 계산한다. 외부 AI API는 쓰지 않는다.
+// 염모제는 브랜드별 카탈로그(lib/dyeCatalog.ts)의 넘버 id로 받는다.
 import { db } from "./db";
 import { harmonyNotes } from "../colorHarmony";
+import {
+  COOL_FAMILIES,
+  FAMILY_LABEL,
+  TARGET_COLORS,
+  byLevelDistance,
+  findBrand,
+  findShade,
+  findTarget,
+  shadeLabel,
+  type ShadeRef,
+  type ToneFamily,
+} from "../colorTargets";
+
+export { TARGET_COLORS };
 
 export type Undertone = "warm" | "cool" | "neutral";
 
-export const TARGET_COLORS = [
-  { name: "로즈 브라운", level: 8, tone: "Rose", color: "#a95f5d" },
-  { name: "코코아 브라운", level: 7, tone: "Natural", color: "#765047" },
-  { name: "애쉬 베이지", level: 9, tone: "Silver", color: "#a69888" },
-  { name: "카키 브라운", level: 8, tone: "Matte", color: "#777358" },
-  { name: "바이올렛", level: 7, tone: "Violet", color: "#69536f" },
-] as const;
-
 export const HISTORY_OPTIONS = ["탈색 1회", "흑염색 이력", "손상모", "새치 30%"] as const;
-export const TUBE_CATALOG = ["8-Rose", "9-Silver", "7-Natural", "Clear", "6-Violet", "5-Matte"] as const;
-
-// 톤 계열: cool 계열은 보정(중화) 용도, clear는 희석용, warm/neutral은 커버 용도.
-const TONE_GROUP: Record<string, "warm" | "cool" | "neutral" | "clear"> = {
-  Rose: "warm",
-  Silver: "cool",
-  Natural: "neutral",
-  Clear: "clear",
-  Violet: "cool",
-  Matte: "cool",
-};
-
-type Tube = { raw: string; level: number; tone: string };
-
-function parseTube(raw: string): Tube | null {
-  if (raw === "Clear") return { raw, level: 0, tone: "Clear" };
-  const m = /^(\d+)-([A-Za-z]+)$/.exec(raw);
-  if (!m) return null;
-  return { raw, level: Number(m[1]), tone: m[2] };
-}
-
-// 매장에서 실제로 파는 톤별 대표 제품(레벨). 미보유 시 "구매 필요"로 추천할 때 이 제품명을 쓴다.
-const CATALOG_BY_TONE: Record<string, Tube> = Object.fromEntries(
-  TUBE_CATALOG.map(parseTube)
-    .filter((t): t is Tube => !!t && t.tone !== "Clear")
-    .map((t) => [t.tone, t]),
-);
 
 export type RecommendInput = {
   rootLevel: number;
@@ -49,6 +29,7 @@ export type RecommendInput = {
   undertone: Undertone;
   targetName: string;
   history: string[];
+  brandId?: string;
   tubes: string[];
   thickness?: string;
 };
@@ -68,11 +49,19 @@ function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
 }
 
+function nearest(refs: ShadeRef[], level: number): ShadeRef | undefined {
+  const cmp = byLevelDistance(level);
+  return [...refs].sort((a, b) => cmp(a.shade, b.shade))[0];
+}
+
+const familyNames = (fs: readonly ToneFamily[]) => fs.map((f) => FAMILY_LABEL[f]).join("/");
+
 export function computeRecommendation(input: RecommendInput): Formula {
-  const target = TARGET_COLORS.find((c) => c.name === input.targetName) ?? TARGET_COLORS[0];
+  const target = findTarget(input.targetName) ?? TARGET_COLORS[0];
   const history = input.history.filter((h) => (HISTORY_OPTIONS as readonly string[]).includes(h));
-  const ownedRaw = input.tubes.filter((t) => (TUBE_CATALOG as readonly string[]).includes(t));
-  const owned = ownedRaw.map(parseTube).filter((t): t is Tube => !!t);
+  const owned = input.tubes.map(findShade).filter((r): r is ShadeRef => !!r);
+  const brand = input.brandId ? findBrand(input.brandId) : owned[0]?.brand;
+  const mainFamilies: readonly ToneFamily[] = target.families;
 
   const currentLevel = Math.round(input.rootLevel * 0.4 + input.midLevel * 0.35 + input.endLevel * 0.25);
   const levelGap = target.level - currentLevel;
@@ -80,51 +69,52 @@ export function computeRecommendation(input: RecommendInput): Formula {
   const notes: string[] = [];
   let matchScore = 95;
 
-  // 1) 주 배합(목표 톤 커버) 튜브 고르기: 톤이 맞고 레벨이 가까운 것 우선.
-  const toneMatches = owned.filter((t) => t.tone === target.tone);
-  let primary: Tube | undefined = toneMatches.sort((a, b) => Math.abs(a.level - target.level) - Math.abs(b.level - target.level))[0];
+  // 1) 주 배합(목표 톤): 목표 계열 중 레벨이 가장 가까운 보유 넘버. 없으면 같은 브랜드에서 구매할 넘버를 제안.
+  let primary = nearest(owned.filter((r) => mainFamilies.includes(r.shade.family)), target.level);
   let primaryOwned = true;
   if (!primary) {
-    primary = owned
-      .filter((t) => t.tone !== "Clear")
-      .sort((a, b) => Math.abs(a.level - target.level) - Math.abs(b.level - target.level))[0];
-    if (primary) {
-      matchScore -= 8;
-      notes.push(`보유한 배합 중 ${target.tone} 톤이 없어 레벨이 가장 가까운 ${primary.raw}로 대체했어요.`);
-    } else {
-      primary = CATALOG_BY_TONE[target.tone] ?? { raw: `${target.level}-${target.tone}`, level: target.level, tone: target.tone };
-      primaryOwned = false;
-      matchScore -= 10;
-      notes.push(`${primary.raw}가 보유 목록에 없어요. 구매 후 진행해주세요.`);
-    }
+    primaryOwned = false;
+    matchScore -= 10;
+    const candidates: ShadeRef[] = (brand?.lines ?? []).flatMap((line) =>
+      line.shades.filter((sh) => mainFamilies.includes(sh.family) && !sh.guessed).map((shade) => ({ brand: brand!, line, shade })),
+    );
+    primary = nearest(candidates, target.level);
+    notes.push(
+      primary
+        ? `보유 염모제 중 ${familyNames(mainFamilies)} 계열이 없어요. ${shadeLabel(primary)} 구매 후 진행해주세요.`
+        : `선택한 브랜드에 ${familyNames(mainFamilies)} 계열 넘버가 없어요. 다른 브랜드를 선택해주세요.`,
+    );
+  } else if (primary.shade.level !== null && Math.abs(primary.shade.level - target.level) >= 2) {
+    matchScore -= 6;
+    notes.push(`목표 ${target.level}레벨과 보유 넘버(${primary.shade.code}) 레벨 차이가 커서 발색이 달라질 수 있어요.`);
   }
 
-  // 2) 보정 튜브: 웜 언더톤(잔류 오렌지/레드)인데 목표가 웜/뉴트럴 계열이면 쿨 톤으로 중화.
-  let secondary: Tube | undefined;
-  if (input.undertone === "warm" && TONE_GROUP[target.tone] !== "cool") {
-    secondary = owned
-      .filter((t) => TONE_GROUP[t.tone] === "cool" && t.raw !== primary.raw)
-      .sort((a, b) => Math.abs(a.level - target.level) - Math.abs(b.level - target.level))[0];
+  // 2) 보정: 웜 언더톤(잔류 오렌지)인데 목표가 차가운 계열이 아니면, 목표에 어울리는 쿨 계열 보유 넘버로 중화.
+  let secondary: ShadeRef | undefined;
+  const targetIsCool = COOL_FAMILIES.includes(mainFamilies[0]);
+  if (input.undertone === "warm" && !targetIsCool) {
+    const correctors = (target.supports as readonly ToneFamily[]).filter((f) => COOL_FAMILIES.includes(f));
+    secondary = nearest(owned.filter((r) => correctors.includes(r.shade.family) && r !== primary), target.level);
     if (secondary) {
-      notes.push(`잔류 오렌지가 감지되어 ${secondary.raw} 톤을 추가해 중화했어요.`);
-    } else {
+      notes.push(`잔류 오렌지가 감지되어 ${shadeLabel(secondary)}를 추가해 중화했어요.`);
+    } else if (correctors.length) {
       matchScore -= 6;
-      notes.push("잔류 오렌지가 감지됐지만 중화용 쿨 톤(Silver/Violet/Matte) 보유가 없어 배합에 반영하지 못했어요.");
+      notes.push(`잔류 오렌지가 감지됐지만 중화용 ${familyNames(correctors)} 계열 보유가 없어 배합에 반영하지 못했어요.`);
     }
   }
 
-  // 3) 희석 튜브: 손상모이거나 가는 모발이면 Clear로 강도를 낮춘다.
+  // 3) 희석: 손상모이거나 가는 모발이면 클리어로 강도를 낮춘다.
   const needsDilute = history.includes("손상모") || input.thickness === "가는 모발";
-  let diluter: Tube | undefined;
+  let diluter: ShadeRef | undefined;
   if (needsDilute) {
-    diluter = owned.find((t) => t.tone === "Clear");
-    if (diluter) notes.push("손상/가는 모발을 고려해 Clear를 섞어 강도를 낮췄어요.");
+    diluter = owned.find((r) => r.shade.family === "clear");
+    if (diluter) notes.push(`손상/가는 모발을 고려해 ${shadeLabel(diluter)}를 섞어 강도를 낮췄어요.`);
   }
 
-  const slots = [primary, secondary, diluter].filter((t): t is Tube => !!t);
+  const slots = [primary, secondary, diluter].filter((t): t is ShadeRef => !!t);
   const weightsBySlotCount: Record<number, number[]> = { 1: [120], 2: [80, 40], 3: [60, 30, 30] };
   const weights = weightsBySlotCount[slots.length] ?? [120];
-  const mix: MixItem[] = slots.map((t, i) => ({ tube: t.raw, grams: weights[i], owned: t !== primary || primaryOwned }));
+  const mix: MixItem[] = slots.map((t, i) => ({ tube: shadeLabel(t), grams: weights[i], owned: t !== primary || primaryOwned }));
 
   // 산화제: 밝혀야 하는 폭이 클수록 고볼륨. 손상/탈색 이력이 있으면 한 단계 낮춘다.
   const devSteps = [3, 4.5, 6, 9];

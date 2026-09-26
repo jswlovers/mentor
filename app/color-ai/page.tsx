@@ -1,19 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { ChangeEvent, useCallback, useEffect, useState } from "react";
+import { ChangeEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api, jsonInit, timeAgo, useMe } from "@/lib/client";
-
-const targetColors = [
-  { name: "로즈 브라운", level: "8레벨", color: "#a95f5d" },
-  { name: "코코아 브라운", level: "7레벨", color: "#765047" },
-  { name: "애쉬 베이지", level: "9레벨", color: "#a69888" },
-  { name: "카키 브라운", level: "8레벨", color: "#777358" },
-  { name: "바이올렛", level: "7레벨", color: "#69536f" },
-];
+import { DYE_BRANDS, FAMILY_LABEL, TARGET_COLORS, findShade, type DyeShade, type TargetColor, type ToneFamily } from "@/lib/colorTargets";
 
 const histories = ["탈색 1회", "흑염색 이력", "손상모", "새치 30%"];
-const tubes = ["8-Rose", "9-Silver", "7-Natural", "Clear", "6-Violet", "5-Matte"];
 const UNDERTONE_LABEL: Record<string, string> = { warm: "웜(잔류 오렌지)", cool: "쿨(애쉬)", neutral: "중성" };
 
 type Analysis = { root: number; mid: number; end: number; undertone: "warm" | "cool" | "neutral" };
@@ -67,13 +59,74 @@ function analyzeImage(imageUrl: string): Promise<Analysis> {
   });
 }
 
+type PickerShade = DyeShade & { lineName: string };
+
+function ShadeChips({ shades, selected, onToggle }: { shades: PickerShade[]; selected: string[]; onToggle: (id: string) => void }) {
+  if (shades.length === 0) return <p className="mt-2 text-xs text-muted">이 라인에는 해당 계열 넘버가 없어요.</p>;
+  return (
+    <div className="mt-2 grid max-h-64 grid-cols-3 gap-2 overflow-y-auto pr-1">
+      {shades.map((s) => (
+        <button key={s.id} type="button" onClick={() => onToggle(s.id)} title={`${s.lineName} ${s.code}${s.name ? ` · ${s.name}` : ""}`} className={`rounded-lg border px-2 py-1.5 text-left transition ${selected.includes(s.id) ? "border-rose-500 bg-rose-500/15 text-rose-300" : "border-border text-muted hover:text-foreground"}`}>
+          <b className="block truncate text-xs font-semibold">{s.code}</b>
+          <span className="block truncate text-[10px] opacity-80">{s.name ?? FAMILY_LABEL[s.family]}{s.guessed ? " (추정)" : ""}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// 브랜드·라인의 넘버 중 목표 컬러에 맞는 계열만 보여준다. "전체 넘버 보기"를 켜면 계열별로 전부 보여준다.
+function TubePicker({ brandId, lineId, target, selected, onToggle, showAll }: { brandId: string; lineId: string; target: TargetColor; selected: string[]; onToggle: (id: string) => void; showAll: boolean }) {
+  const shades = useMemo<PickerShade[]>(() => {
+    const brand = DYE_BRANDS.find((b) => b.id === brandId) ?? DYE_BRANDS[0];
+    return brand.lines
+      .filter((l) => lineId === "all" || l.id === lineId)
+      .flatMap((l) => l.shades.map((s) => ({ ...s, lineName: l.name })))
+      .sort((a, b) => (b.level ?? -1) - (a.level ?? -1));
+  }, [brandId, lineId]);
+  const main: readonly ToneFamily[] = target.families;
+  const supports: readonly ToneFamily[] = target.supports;
+  if (showAll) {
+    const families = Object.keys(FAMILY_LABEL) as ToneFamily[];
+    return (
+      <div>
+        {families.map((f) => {
+          const list = shades.filter((s) => s.family === f);
+          if (list.length === 0) return null;
+          return (
+            <div key={f}>
+              <p className="mt-3 text-xs font-bold text-muted">{FAMILY_LABEL[f]} · {list.length}</p>
+              <ShadeChips shades={list} selected={selected} onToggle={onToggle} />
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+  const mainList = shades.filter((s) => main.includes(s.family) && !s.guessed);
+  const supportList = shades.filter((s) => supports.includes(s.family) && !s.guessed);
+  return (
+    <div>
+      <p className="mt-3 text-xs font-bold text-rose-300">메인 톤 · {main.map((f) => FAMILY_LABEL[f]).join(", ")}</p>
+      <ShadeChips shades={mainList} selected={selected} onToggle={onToggle} />
+      <p className="mt-4 text-xs font-bold text-muted">보정·베이스용 · {supports.map((f) => FAMILY_LABEL[f]).join(", ")}</p>
+      <ShadeChips shades={supportList} selected={selected} onToggle={onToggle} />
+    </div>
+  );
+}
+
 const selectCls = "mt-2 w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm font-normal text-foreground";
 
 export default function ColorAiPage() {
   const { me } = useMe();
-  const [selectedColor, setSelectedColor] = useState(targetColors[0]);
+  const [selectedColor, setSelectedColor] = useState<TargetColor>(TARGET_COLORS[0]);
   const [selectedHistory, setSelectedHistory] = useState<string[]>([]);
-  const [selectedTubes, setSelectedTubes] = useState<string[]>(["8-Rose", "9-Silver", "7-Natural", "Clear"]);
+  const [brandId, setBrandId] = useState(DYE_BRANDS[0].id);
+  const [lineId, setLineId] = useState("all");
+  const [showAllShades, setShowAllShades] = useState(false);
+  const [selectedTubes, setSelectedTubes] = useState<string[]>([]);
+  const brand = DYE_BRANDS.find((b) => b.id === brandId) ?? DYE_BRANDS[0];
+  const visibleLines = brand.lines.filter((l) => lineId === "all" || l.id === lineId);
   const [thickness, setThickness] = useState("보통모");
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
@@ -143,6 +196,7 @@ export default function ColorAiPage() {
         undertone: analysis.undertone,
         targetName: selectedColor.name,
         history: selectedHistory,
+        brandId,
         tubes: selectedTubes,
         thickness,
       }),
@@ -224,22 +278,37 @@ export default function ColorAiPage() {
             </div>
 
             <div className="mt-5">
-              <div className="flex items-center justify-between"><h3 className="text-sm font-bold">목표 컬러</h3><span className="text-xs text-muted">{selectedColor.level} {selectedColor.name}</span></div>
-              <div className="mt-3 flex gap-3">
-                {targetColors.map((color) => <button key={color.name} type="button" aria-label={color.name} onClick={() => setSelectedColor(color)} style={{ backgroundColor: color.color }} className={`h-10 w-10 rounded-full ring-offset-2 ring-offset-surface ${selectedColor.name === color.name ? "ring-2 ring-rose-400" : ""}`} />)}
+              <div className="flex items-center justify-between"><h3 className="text-sm font-bold">목표 컬러</h3><span className="text-xs text-muted">{selectedColor.level}레벨 {selectedColor.name}</span></div>
+              <div className="mt-3 flex flex-wrap gap-3">
+                {TARGET_COLORS.map((color) => <button key={color.name} type="button" aria-label={color.name} title={color.name} onClick={() => setSelectedColor(color)} style={{ backgroundColor: color.color }} className={`h-10 w-10 rounded-full ring-offset-2 ring-offset-surface ${selectedColor.name === color.name ? "ring-2 ring-rose-400" : ""}`} />)}
               </div>
             </div>
 
             <div className="mt-5 grid grid-cols-2 gap-3">
-              <label className="text-sm font-bold">사용 브랜드<select className={selectCls}><option>밀본 어딕시</option><option>웰라 콜레스톤</option><option>로레알 마지렐</option></select></label>
+              <label className="text-sm font-bold">사용 브랜드<select value={brandId} onChange={(e) => { setBrandId(e.target.value); setLineId("all"); setSelectedTubes([]); }} className={selectCls}>{DYE_BRANDS.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
               <label className="text-sm font-bold">모발 굵기<select value={thickness} onChange={(e) => setThickness(e.target.value)} className={selectCls}><option>보통모</option><option>가는 모발</option><option>굵은 모발</option></select></label>
             </div>
 
             <div className="mt-5">
               <div className="flex items-center justify-between"><h3 className="text-sm font-bold">보유 염모제</h3><span className="text-xs text-muted">{selectedTubes.length}개 선택</span></div>
-              <div className="mt-2 grid grid-cols-3 gap-2">
-                {tubes.map((tube) => <button key={tube} type="button" onClick={() => toggle(tube, selectedTubes, setSelectedTubes)} className={`rounded-lg border px-2 py-2 text-xs font-semibold transition ${selectedTubes.includes(tube) ? "border-rose-500 bg-rose-500/15 text-rose-300" : "border-border text-muted hover:text-foreground"}`}>{tube}</button>)}
+              <p className="mt-1 text-[11px] leading-4 text-muted">목표 컬러({selectedColor.name})에 맞는 계열의 넘버만 보여줘요. 가지고 있는 넘버를 골라주세요.</p>
+              <div className="mt-2 flex items-center gap-2">
+                <select value={lineId} onChange={(e) => setLineId(e.target.value)} className="min-w-0 flex-1 rounded-lg border border-border bg-surface-2 px-3 py-2 text-xs text-foreground">
+                  <option value="all">전체 라인</option>
+                  {brand.lines.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+                </select>
+                <label className="flex shrink-0 items-center gap-1.5 text-xs text-muted"><input type="checkbox" checked={showAllShades} onChange={(e) => setShowAllShades(e.target.checked)} />전체 넘버 보기</label>
               </div>
+              <TubePicker brandId={brandId} lineId={lineId} target={selectedColor} selected={selectedTubes} onToggle={(id) => toggle(id, selectedTubes, setSelectedTubes)} showAll={showAllShades} />
+              {selectedTubes.length > 0 ? (
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {selectedTubes.map((id) => {
+                    const ref = findShade(id);
+                    return <button key={id} type="button" onClick={() => toggle(id, selectedTubes, setSelectedTubes)} className="rounded-full bg-rose-500/15 px-2.5 py-1 text-[11px] font-semibold text-rose-300">{ref ? `${ref.line.name} ${ref.shade.code}` : id} ✕</button>;
+                  })}
+                </div>
+              ) : null}
+              <p className="mt-2 text-[10px] leading-4 text-muted">출처: {[...new Set(visibleLines.map((l) => l.source))].join(" · ")}</p>
             </div>
 
             <button type="button" onClick={createRecommendation} disabled={recommending} className="mt-6 w-full rounded-xl bg-rose-500 py-3.5 font-bold text-white transition hover:bg-rose-400 disabled:opacity-50">{recommending ? "추천 계산 중..." : "AI 배합 추천 받기"}</button>

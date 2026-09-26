@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ChangeEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api, jsonInit, timeAgo, useMe } from "@/lib/client";
 import { DYE_BRANDS, FAMILY_LABEL, TARGET_COLORS, findShade, type DyeShade, type TargetColor, type ToneFamily } from "@/lib/colorTargets";
+import ColorQna from "./ColorQna";
 
 const histories = ["탈색 1회", "흑염색 이력", "손상모", "새치 30%"];
 const UNDERTONE_LABEL: Record<string, string> = { warm: "웜(잔류 오렌지)", cool: "쿨(애쉬)", neutral: "중성" };
@@ -362,6 +363,8 @@ export default function ColorAiPage() {
           ) : null}
         </div>
       </div>
+
+      <ColorQna />
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import LegalPage from "../components/LegalPage";
-import { DIFFICULTIES, DIFFICULTY_KEYS, EXPERT_SHARE } from "@/lib/server/pricing";
+import { EXPERT_SHARE, TIER_KEYS, TIERS } from "@/lib/server/pricing";
 
 export const metadata = { title: "이용약관 - 미용 SOS" };
 
@@ -15,7 +15,7 @@ export default function Terms() {
       <h2 className="font-semibold">제4조 (코인)</h2>
       <p>코인은 서비스 안에서만 사용하는 결제 수단이며 1코인은 1원에 해당합니다. 코인은 무통장입금 또는 카드 결제로 충전하며, 충전·사용·환불 내역은 회원이 코인 화면에서 확인할 수 있습니다. 환불에 관한 사항은 환불 규정을 따릅니다.</p>
       <h2 className="font-semibold">제5조 (1:1 상담 요금)</h2>
-      <p>1:1 상담을 신청하는 질문자는 질문 난이도에 따른 상담 시작비({DIFFICULTY_KEYS.map((d) => `${DIFFICULTIES[d].label} ${DIFFICULTIES[d].fee.toLocaleString()}코인`).join(", ")})를 지급하며, 이후 채팅 메시지와 통화 이용 시간에 따라 요금이 차감됩니다. 세부 요금은 코인 화면의 요금 안내를 따릅니다. 전문가는 상담 참여 시 요금을 지급하지 않습니다.</p>
+      <p>1:1 상담을 신청하는 질문자는 답변 등급에 따른 상담 시작비({TIER_KEYS.map((t) => `${TIERS[t].label} ${TIERS[t].fee.toLocaleString()}코인`).join(", ")})를 지급하며, 이후 채팅 메시지와 통화 이용 시간에 따라 요금이 차감됩니다. 세부 요금은 코인 화면의 요금 안내를 따릅니다. 전문가는 상담 참여 시 요금을 지급하지 않습니다.</p>
       <h2 className="font-semibold">제6조 (전문가와 수익 정산)</h2>
       <p>전문가로 승인된 회원은 질문자가 지급한 상담 요금의 {Math.round(EXPERT_SHARE * 100)}%를 수익으로 정산받고, 나머지는 서비스 이용 수수료로 운영자에게 귀속됩니다. 출금은 운영자가 정한 최소 금액 이상으로 신청할 수 있으며, 관련 세금(사업소득 원천징수 등)은 관계 법령에 따릅니다.</p>
       <h2 className="font-semibold">제7조 (금지 행위)</h2>

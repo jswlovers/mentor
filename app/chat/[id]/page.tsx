@@ -4,23 +4,32 @@ import { useParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, jsonInit, useMe, won } from "@/lib/client";
 import {
-  ATTACHMENT_COST, AUTO_REFUND_MINUTES, canHandle, COST_PER_SEC, DEFAULT_DIFFICULTY, DIFFICULTIES, DIFFICULTY_KEYS, type Difficulty,
-  EXPERT_SHARE, MAX_MESSAGE_CHARS, MESSAGE_PER_CHAR, messageCost,
+  ATTACHMENT_COST, AUTO_REFUND_MINUTES, COST_PER_SEC, DEFAULT_TIER, EXPERT_SHARE, MAX_MESSAGE_CHARS, MAX_VIDEO_BYTES,
+  MESSAGE_PER_CHAR, messageCost, type Tier, TIER_KEYS, TIERS,
 } from "@/lib/server/pricing";
 
 type Msg = {
   id: number; sender_id: string; sender_name: string; body: string;
-  attachment_type: "image" | "file" | "call" | null; attachment_url: string | null; attachment_name: string | null; created_at: string;
+  attachment_type: "image" | "video" | "file" | "call" | null; attachment_url: string | null; attachment_name: string | null; created_at: string;
 };
 type Status = {
   started: boolean; status: "open" | "ended" | "cancelled" | null; role: "asker" | "expert" | "viewer";
   canJoin: boolean; isQuestionOwner: boolean; category: string; expertName: string | null; expertId: string | null; reviewed: boolean; askerName: string | null; coins: number;
-  difficulty: Difficulty | null; fee: number | null; deadline: string | null; preferredName: string | null;
+  tier: Tier | null; fee: number | null; deadline: string | null; preferredName: string | null;
 };
 type Expert = {
   id: string; name: string; headline: string | null; rating: number | null; reviewCount: number; available: boolean;
-  years: number | null; consultations: number; avgResponseMinutes: number | null;
+  consultations: number; avgResponseMinutes: number | null;
 };
+
+/** 등급별로 답변에 담기는 것 */
+const INCLUDES: Record<Tier, string[]> = {
+  basic: ["글 답변"],
+  detail: ["글 답변", "사진·도식·자료 첨부"],
+  premium: ["글 답변", "사진·도식·자료 첨부", "🎬 시연 영상"],
+};
+const VIDEO_ACCEPT = "video/mp4,video/quicktime,video/webm";
+const PHOTO_ACCEPT = "image/jpeg,image/png,image/gif,image/webp,application/pdf,.doc,.docx,.xls,.xlsx,.txt,.zip";
 
 /** 응답 마감까지 남은 시간(mm:ss). 1초마다 갱신하고, 10초마다·마감 시 상태를 다시 불러온다. */
 function Countdown({ until, onDone }: { until: string; onDone: () => void }) {
@@ -38,6 +47,7 @@ type Call = { url: string; type: "voice" | "video" };
 
 function Attachment({ m }: { m: Msg }) {
   // 같은 출처 + 세션 쿠키로 인증되므로 그대로 src에 쓸 수 있다.
+  if (m.attachment_type === "video") return <video src={m.attachment_url!} controls playsInline preload="metadata" className="mt-1 max-h-80 w-full rounded-lg bg-black" />;
   return m.attachment_type === "image"
     // eslint-disable-next-line @next/next/no-img-element
     ? <img src={m.attachment_url!} alt={m.attachment_name ?? "사진"} className="mt-1 max-h-60 rounded-lg" />
@@ -92,7 +102,7 @@ export default function Chat() {
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState("");
   const [experts, setExperts] = useState<Expert[]>([]);
-  const [difficulty, setDifficulty] = useState<Difficulty>(DEFAULT_DIFFICULTY);
+  const [tierKey, setTierKey] = useState<Tier>(DEFAULT_TIER);
   const [pick, setPick] = useState("");
   const lastId = useRef(0);
   const bottom = useRef<HTMLDivElement>(null);
@@ -189,13 +199,8 @@ export default function Chat() {
 
   // ── 상담 시작 전 ──
   if (!status.started) {
-    const tier = DIFFICULTIES[difficulty];
-    const eligible = experts.filter((x) => x.id !== me?.id && canHandle(x.years, difficulty));
-    const choose = (d: Difficulty) => {
-      setDifficulty(d);
-      // 고른 전문가가 새 난이도를 맡을 수 없으면 선택을 푼다
-      if (pick && !experts.some((x) => x.id === pick && canHandle(x.years, d))) setPick("");
-    };
+    const tier = TIERS[tierKey];
+    const eligible = experts.filter((x) => x.id !== me?.id);
     const pill = (on: boolean) => `rounded-xl border p-3 text-left transition ${on ? "border-rose-500 bg-rose-500/10" : "border-border bg-surface hover:border-white/20"}`;
     return (
       <div className="mx-auto max-w-xl space-y-4 px-6 py-8">
@@ -203,16 +208,17 @@ export default function Chat() {
         {status.isQuestionOwner ? (
           <>
             <section>
-              <h2 className="mb-2 text-sm font-semibold">1. 질문 난이도</h2>
+              <h2 className="mb-2 text-sm font-semibold">1. 답변 등급</h2>
               <div className="grid grid-cols-3 gap-2">
-                {DIFFICULTY_KEYS.map((d) => {
-                  const t = DIFFICULTIES[d];
-                  const n = experts.filter((x) => x.id !== me?.id && canHandle(x.years, d)).length;
+                {TIER_KEYS.map((k) => {
+                  const t = TIERS[k];
                   return (
-                    <button type="button" key={d} onClick={() => choose(d)} className={pill(difficulty === d)}>
+                    <button type="button" key={k} onClick={() => setTierKey(k)} className={pill(tierKey === k)}>
                       <b className="block text-sm">{t.label}</b>
                       <span className="block text-sm text-rose-300">{won(t.fee)}</span>
-                      <span className="mt-1 block text-[11px] text-muted">{t.minYears > 0 ? `경력 ${t.minYears}년+` : "경력 무관"} · 응대 가능 {n}명</span>
+                      <ul className="mt-1 space-y-0.5 text-[11px] text-muted">
+                        {INCLUDES[k].map((s) => <li key={s}>✓ {s}</li>)}
+                      </ul>
                     </button>
                   );
                 })}
@@ -235,7 +241,6 @@ export default function Chat() {
                       <span className="flex items-center gap-1.5 text-sm">
                         <b>{x.name}</b>
                         <span className="text-[11px] text-emerald-400">● 응대 가능</span>
-                        {x.years !== null && <span className="text-[11px] text-muted">경력 {x.years}년</span>}
                       </span>
                       {x.headline && <span className="block text-xs">{x.headline}</span>}
                       <span className="block text-xs text-muted">
@@ -249,7 +254,7 @@ export default function Chat() {
               </ul>
               {eligible.length === 0 && (
                 <p className="mt-2 rounded-lg border border-amber-500/20 bg-amber-500/10 p-2 text-xs text-amber-300">
-                  지금 {tier.label} 질문을 맡을 수 있는 응대 가능 전문가가 없어요. 자동 배정으로 신청하면 쉬는 중이던 전문가가 돌아올 때까지 기다리고, {AUTO_REFUND_MINUTES}분 안에 아무도 참여하지 않으면 전액 환불돼요.
+                  지금 응대 가능한 전문가가 없어요. 자동 배정으로 신청하면 쉬는 중이던 전문가가 돌아올 때까지 기다리고, {AUTO_REFUND_MINUTES}분 안에 아무도 참여하지 않으면 전액 환불돼요.
                 </p>
               )}
               {pick && <p className="mt-1.5 text-xs text-muted">고른 전문가에게 먼저 알리고, 응답이 없으면 다른 전문가에게도 알려요.</p>}
@@ -267,7 +272,7 @@ export default function Chat() {
             </div>
             {status.coins < tier.fee && <Link href="/coins" className="block rounded-lg border border-border py-2 text-center text-sm hover:border-white/30">코인 충전하러 가기</Link>}
             {err && <p className="text-sm text-rose-400">{err}</p>}
-            <button onClick={() => post("/api/consultations", { roomId, difficulty, expertId: pick || undefined })} className="w-full rounded-lg bg-rose-500 py-3 font-medium text-white hover:bg-rose-400">{won(tier.fee)} 결제하고 상담 시작</button>
+            <button onClick={() => post("/api/consultations", { roomId, tier: tierKey, expertId: pick || undefined })} className="w-full rounded-lg bg-rose-500 py-3 font-medium text-white hover:bg-rose-400">{won(tier.fee)} 결제하고 상담 시작</button>
           </>
         ) : (
           <p className="text-sm text-muted">질문 작성자가 상담을 시작하면 승인된 전문가가 참여할 수 있어요.</p>
@@ -284,18 +289,14 @@ export default function Chat() {
         {status.canJoin ? (
           <>
             <p className="text-sm text-muted">
-              {status.askerName}님이 {status.difficulty && <b className="text-foreground">{DIFFICULTIES[status.difficulty].label}</b>} 상담을 신청했어요. 참여하면 질문자가 낸 금액의 {Math.round(EXPERT_SHARE * 100)}%가 수익으로 쌓여요.
+              {status.askerName}님이 {status.tier && <b className="text-foreground">{TIERS[status.tier].label}</b>} 상담을 신청했어요.{status.tier === "premium" && " 시연 영상을 첨부해 답변해주세요."} 참여하면 질문자가 낸 금액의 {Math.round(EXPERT_SHARE * 100)}%가 수익으로 쌓여요.
               {status.deadline && <> 응답 마감까지 <Countdown until={status.deadline} onDone={loadStatus} /></>}
             </p>
             {err && <p className="text-sm text-rose-400">{err}</p>}
             <button onClick={() => post(`/api/consultations/${roomId}/join`)} className="w-full rounded-lg bg-rose-500 py-3 font-medium text-white hover:bg-rose-400">전문가로 상담 참여</button>
           </>
         ) : (
-          <p className="text-sm text-muted">
-            {status.deadline && status.difficulty && me?.isExpert
-              ? `${DIFFICULTIES[status.difficulty].label} 상담은 경력 ${DIFFICULTIES[status.difficulty].minYears}년 이상 전문가만 참여할 수 있어요.`
-              : "이 상담은 참여자만 볼 수 있어요."}
-          </p>
+          <p className="text-sm text-muted">이 상담은 참여자만 볼 수 있어요.</p>
         )}
       </div>
     );
@@ -310,6 +311,15 @@ export default function Chat() {
   const open = status.status === "open";
   const cost = isAsker ? messageCost(text, !!file) : 0;
   const chars = [...text].length;
+  // 답변 등급이 정한 첨부 범위: 영상은 프리미엄에서만, 기본 등급의 전문가는 글로만 답한다(질문자는 사진·파일 가능).
+  const media = TIERS[status.tier ?? DEFAULT_TIER].media;
+  const canVideo = media === "video";
+  const canAttach = isAsker || media !== "text";
+  const pickFile = (f: File | null) => {
+    if (f && f.type.startsWith("video/") && f.size > MAX_VIDEO_BYTES) return setErr(`영상은 ${MAX_VIDEO_BYTES / 1024 / 1024}MB 이하만 보낼 수 있어요`);
+    setErr("");
+    setFile(f);
+  };
 
   return (
     <div className="flex h-[calc(100vh-134px)] flex-col">
@@ -317,6 +327,7 @@ export default function Chat() {
         <span>
           {isAsker ? <>질문자(나) · 전문가: {status.expertId ? <Link href={`/experts/${status.expertId}`} className="underline">{status.expertName}</Link> : "대기 중"}</> : `전문가(나) · 질문자: ${status.askerName}`}
           {isAsker && ` · 잔액 ${status.coins.toLocaleString()}`}
+          {status.tier && <span className="ml-1 rounded bg-rose-500/15 px-1.5 py-0.5 text-[11px] text-rose-300">{TIERS[status.tier].label}</span>}
         </span>
         <span className="flex shrink-0 gap-2">
           {open && isAsker && !status.expertName && <button onClick={() => confirm("전액 환불하고 상담을 취소할까요?") && post(`/api/consultations/${roomId}/cancel`)} className="underline hover:text-foreground">취소·환불</button>}
@@ -342,7 +353,7 @@ export default function Chat() {
               <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${mine ? "bg-rose-500 text-white" : "border border-border bg-surface-2"}`}>
                 {!mine && <p className="mb-0.5 text-[11px] font-semibold text-muted">{m.sender_name}</p>}
                 <p className="whitespace-pre-wrap break-words">{m.body}</p>
-                {(m.attachment_type === "image" || m.attachment_type === "file") && m.attachment_url && <Attachment m={m} />}
+                {(m.attachment_type === "image" || m.attachment_type === "video" || m.attachment_type === "file") && m.attachment_url && <Attachment m={m} />}
                 {m.attachment_type === "call" && m.attachment_url && open && (
                   <button onClick={() => join(m.attachment_name === "video" ? "video" : "voice", m.attachment_url!)} className="mt-1 rounded-full bg-white px-3 py-1 text-xs font-medium text-rose-600">통화 참여</button>
                 )}
@@ -364,13 +375,25 @@ export default function Chat() {
       {open && (
         <form onSubmit={submit} className="space-y-1.5 border-t border-border bg-surface p-3">
           {err && <p className="text-xs text-rose-400">{err}</p>}
-          {file && <p className="text-xs text-muted">📎 {file.name} <button type="button" onClick={() => setFile(null)} className="underline">취소</button></p>}
+          {!isAsker && status.tier && (
+            <p className="text-[11px] text-muted">
+              {TIERS[status.tier].label} 상담 · {media === "video" ? "🎬 시연 영상과 사진을 첨부해 답변해주세요" : media === "photo" ? "📷 참고 사진·자료를 첨부해 자세히 답변해주세요" : "글로 답변하는 상담이에요"}
+            </p>
+          )}
+          {file && <p className="text-xs text-muted">{file.type.startsWith("video/") ? "🎬" : "📎"} {file.name} ({(file.size / 1024 / 1024).toFixed(1)}MB) <button type="button" onClick={() => setFile(null)} className="underline">취소</button></p>}
           <div className="flex gap-1.5">
             <button type="button" onClick={() => requestCall("voice")} className="rounded-lg border border-border px-2 text-lg hover:border-white/30" title="보이스톡">📞</button>
             <button type="button" onClick={() => requestCall("video")} className="rounded-lg border border-border px-2 text-lg hover:border-white/30" title="페이스톡">📹</button>
-            <label className="flex cursor-pointer items-center rounded-lg border border-border px-2 text-lg hover:border-white/30" title="사진/파일">
-              📎<input type="file" className="hidden" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-            </label>
+            {canAttach && (
+              <label className="flex cursor-pointer items-center rounded-lg border border-border px-2 text-lg hover:border-white/30" title="사진/파일">
+                📎<input type="file" accept={PHOTO_ACCEPT} className="hidden" onChange={(e) => { pickFile(e.target.files?.[0] ?? null); e.target.value = ""; }} />
+              </label>
+            )}
+            {canVideo && (
+              <label className="flex cursor-pointer items-center rounded-lg border border-border px-2 text-lg hover:border-white/30" title={`영상 (최대 ${MAX_VIDEO_BYTES / 1024 / 1024}MB)`}>
+                🎬<input type="file" accept={VIDEO_ACCEPT} className="hidden" onChange={(e) => { pickFile(e.target.files?.[0] ?? null); e.target.value = ""; }} />
+              </label>
+            )}
             <input value={text} onChange={(e) => setText(e.target.value.slice(0, MAX_MESSAGE_CHARS))} placeholder="메시지 입력" className="min-w-0 flex-1 rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-foreground placeholder:text-muted" />
             <button className="rounded-lg bg-rose-500 px-3 text-sm text-white hover:bg-rose-400">전송</button>
           </div>

@@ -1,9 +1,8 @@
-import { cancelAndRefund, claimExpert, expertCanHandle, getConsultation, roleOf } from "@/lib/server/consult";
+import { cancelAndRefund, claimExpert, getConsultation, roleOf } from "@/lib/server/consult";
 import { getBalance } from "@/lib/server/coins";
 import { db } from "@/lib/server/db";
 import { forbidden, getUser, unauthorized } from "@/lib/server/http";
 import { notify } from "@/lib/server/notify";
-import { DIFFICULTIES } from "@/lib/server/pricing";
 
 const endStmt = db.prepare(`UPDATE consultations SET status = ?, ended_at = datetime('now') WHERE room_id = ? AND status = 'open'`);
 
@@ -18,10 +17,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ roomId:
 
   if (action === "join") {
     if (!user.isExpert) return forbidden("승인된 전문가만 참여할 수 있어요");
-    if (!expertCanHandle(c, user.id)) {
-      const d = DIFFICULTIES[c.difficulty];
-      return forbidden(`${d.label} 상담은 경력 ${d.minYears}년 이상 전문가만 참여할 수 있어요`);
-    }
     db.exec("BEGIN");
     try {
       if (!claimExpert(c, user)) {

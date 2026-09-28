@@ -20,7 +20,7 @@ const STEPS = [
     n: 3,
     title: "급하면 1:1 상담",
     badge: "코인",
-    body: `전문가와 채팅·보이스톡·페이스톡으로 바로 해결해요. 난이도별 상담 시작비 ${won(CONSULT_FEE_MIN)}~${won(CONSULT_FEE_MAX)}, ${AUTO_REFUND_MINUTES}분 안에 전문가가 참여하지 않으면 전액 환불돼요.`,
+    body: `전문가와 채팅·보이스톡·페이스톡으로 바로 해결해요. 답변 등급별 상담 시작비 ${won(CONSULT_FEE_MIN)}~${won(CONSULT_FEE_MAX)}, ${AUTO_REFUND_MINUTES}분 안에 전문가가 참여하지 않으면 전액 환불돼요.`,
   },
 ];
 

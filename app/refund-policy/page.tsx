@@ -8,7 +8,7 @@ export default function RefundPolicy() {
     <LegalPage title="환불 규정">
       <h2 className="font-semibold">1. 1:1 상담 (전문가 참여 전)</h2>
       <ul className="list-disc space-y-1 pl-5">
-        <li>전문가가 상담에 참여하기 전에는 질문자가 언제든 상담을 <b>취소하고 전액 환불</b>받을 수 있습니다. (난이도별 상담 시작비와 그 동안 사용한 메시지 요금 전부)</li>
+        <li>전문가가 상담에 참여하기 전에는 질문자가 언제든 상담을 <b>취소하고 전액 환불</b>받을 수 있습니다. (답변 등급별 상담 시작비와 그 동안 사용한 메시지 요금 전부)</li>
         <li>상담 시작 후 <b>{AUTO_REFUND_MINUTES}분</b> 안에 전문가가 참여하지 않으면 상담은 <b>자동으로 취소되고 전액 환불</b>됩니다.</li>
       </ul>
       <h2 className="font-semibold">2. 1:1 상담 (전문가 참여 후)</h2>

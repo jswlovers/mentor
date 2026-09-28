@@ -1,30 +1,29 @@
 // 코인 과금 정책. 1코인 = 1원. 서버와 프론트가 같은 값을 쓴다.
 // 과금 대상은 상담을 시작한 질문자(asker)뿐이고, 전문가의 답변·통화는 과금하지 않는다.
 //
-// 상담 시작비는 난이도별로 다르고(일반 5만원이 기준), 나머지 단가는 포레스트클럽의 값을 기본으로 두었다.
+// 상담 시작비는 답변 등급별로 다르고(상세 5만원이 기준), 나머지 단가는 포레스트클럽의 값을 기본으로 두었다.
 // 사업 판단에 따라 이 파일에서만 바꾸면 전체에 반영된다.
 export const COIN_PER_KRW = 1;
 export const MIN_CHARGE_KRW = 1000;
 
 /**
- * 1. 상담 시작비: 상담을 신청(시작)할 때 1회 차감. 질문자가 고른 난이도에 따라 금액이 다르고,
- *    그 난이도는 경력(expert_years)이 minYears 이상인 전문가만 맡을 수 있다(경력 미입력은 0년으로 본다).
+ * 1. 상담 시작비: 상담을 신청(시작)할 때 1회 차감. 질문자가 고른 답변 등급에 따라 금액이 다르다.
+ *    등급은 답변에 담을 수 있는 자료로 구분한다(media): text = 글만, photo = 사진·파일 첨부, video = 시연 영상까지.
+ *    질문자는 등급과 상관없이 사진·파일을 보낼 수 있고, 영상은 영상 등급 상담에서만 양쪽 모두 보낼 수 있다.
  */
-export const DIFFICULTIES = {
-  basic: { label: "기초", fee: 30_000, minYears: 0, desc: "홈케어·제품 추천·간단한 시술 문의" },
-  normal: { label: "일반", fee: 50_000, minYears: 5, desc: "펌·염색·커트 등 일반 시술 문제" },
-  hard: { label: "고난도", fee: 80_000, minYears: 10, desc: "손상 복구·교정·재시술 등 까다로운 케이스" },
+export const TIERS = {
+  basic: { label: "기본 답변", fee: 30_000, media: "text", desc: "채팅으로 원인과 해결 방법을 글로 정리해 드려요" },
+  detail: { label: "상세 답변", fee: 50_000, media: "photo", desc: "글 + 참고 사진·도식·자료 파일로 자세히 설명해 드려요" },
+  premium: { label: "프리미엄 답변", fee: 80_000, media: "video", desc: "글·사진 + 전문가가 직접 찍은 시연 영상으로 보여드려요" },
 } as const;
-export type Difficulty = keyof typeof DIFFICULTIES;
-export const DIFFICULTY_KEYS = Object.keys(DIFFICULTIES) as Difficulty[];
-export const DEFAULT_DIFFICULTY: Difficulty = "normal";
-export const isDifficulty = (v: unknown): v is Difficulty => typeof v === "string" && Object.hasOwn(DIFFICULTIES, v);
-/** 이 경력으로 맡을 수 있는 난이도인지 */
-export const canHandle = (years: number | null | undefined, d: Difficulty) => (years ?? 0) >= DIFFICULTIES[d].minYears;
-/** 이 경력으로 맡을 수 있는 가장 높은 난이도 */
-export const maxDifficulty = (years: number | null | undefined) => [...DIFFICULTY_KEYS].reverse().find((d) => canHandle(years, d)) ?? "basic";
-export const CONSULT_FEE_MIN = Math.min(...DIFFICULTY_KEYS.map((d) => DIFFICULTIES[d].fee));
-export const CONSULT_FEE_MAX = Math.max(...DIFFICULTY_KEYS.map((d) => DIFFICULTIES[d].fee));
+export type Tier = keyof typeof TIERS;
+export const TIER_KEYS = Object.keys(TIERS) as Tier[];
+export const DEFAULT_TIER: Tier = "detail";
+export const isTier = (v: unknown): v is Tier => typeof v === "string" && Object.hasOwn(TIERS, v);
+export const CONSULT_FEE_MIN = Math.min(...TIER_KEYS.map((t) => TIERS[t].fee));
+export const CONSULT_FEE_MAX = Math.max(...TIER_KEYS.map((t) => TIERS[t].fee));
+/** 영상 첨부 최대 크기(영상 등급 상담 전용) */
+export const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
 
 /** 2. 쪽지(채팅) 과금: 글자당 단가, 최소 요금. (공백 포함 글자 수, 사진/파일은 첨부 요금 추가) */
 export const MESSAGE_PER_CHAR = 10;

@@ -2,14 +2,16 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { getBalance, InsufficientCoinsError } from "@/lib/server/coins";
-import { chargeAsker, claimExpert, expertCanHandle, getConsultation, isValidRoomId, roleOf } from "@/lib/server/consult";
+import { chargeAsker, claimExpert, getConsultation, isValidRoomId, roleOf } from "@/lib/server/consult";
 import { DATA_DIR, db } from "@/lib/server/db";
 import { forbidden, getUser, limited, unauthorized } from "@/lib/server/http";
 import {
   ENTRY_MIN_COINS,
   MAX_MESSAGE_CHARS,
   MAX_ROOM_MESSAGES,
+  MAX_VIDEO_BYTES,
   messageCost,
+  TIERS,
 } from "@/lib/server/pricing";
 import { notify } from "@/lib/server/notify";
 import { createCallRoom } from "@/lib/server/videocall";
@@ -28,6 +30,8 @@ const FILE_MIME = new Set([
   "application/zip",
 ]);
 const MAX_FILE_BYTES = 15 * 1024 * 1024;
+// 시연 영상(영상 등급 상담 전용). 형식 → 저장 확장자
+const VIDEO_MIME: Record<string, string> = { "video/mp4": ".mp4", "video/quicktime": ".mov", "video/webm": ".webm" };
 
 const listStmt = db.prepare(
   `SELECT id, sender_id, sender_name, body, attachment_type, attachment_url, attachment_name, created_at
@@ -70,7 +74,7 @@ export async function POST(req: Request) {
   if (consult.status !== "open") return Response.json({ error: "종료된 상담이에요" }, { status: 409 });
   // 참여자는 질문자와 배정된 전문가뿐. 배정 전이면 승인된 전문가가 첫 메시지를 보내며 참여한다.
   const role = roleOf(consult, user);
-  const willClaim = role === "viewer" && !consult.expert_id && user.isExpert && expertCanHandle(consult, user.id);
+  const willClaim = role === "viewer" && !consult.expert_id && user.isExpert;
   if (role === "viewer" && !willClaim) return forbidden("이 상담의 참여자가 아니에요");
   const billed = role === "asker"; // 과금은 질문자만
 
@@ -106,11 +110,22 @@ export async function POST(req: Request) {
     }
     if (!body && !hasFile) return Response.json({ error: "메시지 내용을 입력해주세요" }, { status: 400 });
     if (hasFile) {
-      if (file.size > MAX_FILE_BYTES) return Response.json({ error: "파일은 15MB 이하만 보낼 수 있어요" }, { status: 400 });
-      if (!IMAGE_MIME.has(file.type) && !FILE_MIME.has(file.type)) {
+      // 답변 등급이 정한 범위 안에서만 첨부할 수 있다. 질문자는 사진·파일을 항상 보낼 수 있다.
+      const tier = TIERS[consult.tier];
+      const isVideo = Object.hasOwn(VIDEO_MIME, file.type);
+      if (!IMAGE_MIME.has(file.type) && !FILE_MIME.has(file.type) && !isVideo) {
         return Response.json({ error: "지원하지 않는 파일 형식이에요" }, { status: 400 });
       }
-      if (!body) body = IMAGE_MIME.has(file.type) ? "사진을 보냈어요" : "파일을 보냈어요";
+      if (isVideo && tier.media !== "video") {
+        return Response.json({ error: `영상은 ${TIERS.premium.label} 상담에서만 보낼 수 있어요` }, { status: 403 });
+      }
+      if (!isVideo && tier.media === "text" && role !== "asker") {
+        return Response.json({ error: `${tier.label} 상담은 글로만 답변해요. 사진·파일은 ${TIERS.detail.label}부터 보낼 수 있어요` }, { status: 403 });
+      }
+      if (file.size > (isVideo ? MAX_VIDEO_BYTES : MAX_FILE_BYTES)) {
+        return Response.json({ error: isVideo ? `영상은 ${MAX_VIDEO_BYTES / 1024 / 1024}MB 이하만 보낼 수 있어요` : "파일은 15MB 이하만 보낼 수 있어요" }, { status: 400 });
+      }
+      if (!body) body = isVideo ? "영상을 보냈어요" : IMAGE_MIME.has(file.type) ? "사진을 보냈어요" : "파일을 보냈어요";
     }
     cost = billed ? messageCost(body, hasFile) : 0;
   }
@@ -122,10 +137,12 @@ export async function POST(req: Request) {
       chargeAsker(getConsultation(roomId)!, cost, "message_spend", `메시지 발송 ${[...body].length}자`);
     }
     if (hasFile) {
-      const ext = path.extname(file.name).slice(0, 10).replace(/[^a-zA-Z0-9.]/g, "");
+      const video = VIDEO_MIME[file.type];
+      // 영상은 스트리밍 재생 시 Content-Type을 맞추도록 형식 기준 확장자를 쓴다.
+      const ext = video ?? path.extname(file.name).slice(0, 10).replace(/[^a-zA-Z0-9.]/g, "");
       const filename = `${crypto.randomUUID()}${ext}`;
       fs.writeFileSync(path.join(UPLOAD_DIR, filename), Buffer.from(await file.arrayBuffer()));
-      attachmentType = IMAGE_MIME.has(file.type) ? "image" : "file";
+      attachmentType = video ? "video" : IMAGE_MIME.has(file.type) ? "image" : "file";
       attachmentUrl = `/api/messages/attachments/${filename}`;
       attachmentName = file.name;
     }

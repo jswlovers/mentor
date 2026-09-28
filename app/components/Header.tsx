@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { api, jsonInit, notifyMeChanged, useMe } from "@/lib/client";
 import Avatar from "./Avatar";
+import ConsultRequestAlert from "./ConsultRequestAlert";
 
 export default function Header() {
   const { me, refresh } = useMe();
@@ -32,6 +33,7 @@ export default function Header() {
   };
 
   return (
+    <>
     <header className="sticky top-0 z-10 border-b border-border bg-background/85 px-4 py-3 backdrop-blur-md">
       <div className="flex items-center justify-between">
         <Link href="/" className="text-lg font-bold tracking-tight text-rose-400">미용 SOS</Link>
@@ -67,5 +69,8 @@ export default function Header() {
         </nav>
       )}
     </header>
+    {/* 온라인인 전문가에게 새 상담 요청을 팝업으로 알린다(헤더의 blur 밖에 둬야 화면 기준으로 고정된다) */}
+    <ConsultRequestAlert online={!!av?.availableNow} />
+    </>
   );
 }

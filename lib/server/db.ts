@@ -314,6 +314,12 @@ try { db.exec(`ALTER TABLE users ADD COLUMN expert_off_start TEXT`); } catch {}
 try { db.exec(`ALTER TABLE users ADD COLUMN expert_off_end TEXT`); } catch {}
 // 회원 프로필 사진(공개, data/uploads 안의 파일명). 전문가는 목록·프로필에 표시된다.
 try { db.exec(`ALTER TABLE users ADD COLUMN photo TEXT`); } catch {}
+// 질문자가 "지금 답변 가능한 전문가 찾기"로 여러 명을 골라 상담을 열면, 1차 알림은 이 전문가들(그 순간 ON인 사람)에게만 간다.
+db.exec(`CREATE TABLE IF NOT EXISTS consult_targets (
+  room_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  PRIMARY KEY (room_id, user_id)
+)`);
 // 기존 회원(가입 당시 phone이 없던 계정)은 NULL을 허용하고, 값이 있으면 중복을 막는다.
 db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone ON users(phone) WHERE phone IS NOT NULL`);
 

@@ -16,7 +16,7 @@ type Msg = {
 type Status = {
   started: boolean; status: "open" | "ended" | "cancelled" | null; role: "asker" | "expert" | "viewer";
   canJoin: boolean; isQuestionOwner: boolean; category: string; expertName: string | null; expertId: string | null; reviewed: boolean; askerName: string | null; coins: number;
-  tier: Tier | null; fee: number | null; expertShare: number | null; deadline: string | null; preferredName: string | null;
+  tier: Tier | null; fee: number | null; expertShare: number | null; deadline: string | null; preferredName: string | null; targetNames: string[];
 };
 type Expert = {
   id: string; name: string; headline: string | null; salon: string | null; photoUrl: string | null; rating: number | null; reviewCount: number; available: boolean;
@@ -106,8 +106,12 @@ export default function Chat() {
   const [expertsLoaded, setExpertsLoaded] = useState(false);
   const [tierKey, setTierKey] = useState<Tier>(DEFAULT_TIER);
   // 전문가 찾기에서 골라 온 전문가(?expert=)를 미리 선택해 둔다
-  const presetExpert = useSearchParams().get("expert");
-  const [pick, setPick] = useState(presetExpert ?? "");
+  const search = useSearchParams();
+  const presetExpert = search.get("expert");
+  // ⚡ 지금 답변 가능한 전문가 찾기로 고른 여러 명(?experts=a,b). 기본으로 "이분들에게 동시에 요청"이 선택된다.
+  const groupIds = (search.get("experts") ?? "").split(",").filter(Boolean).slice(0, 10);
+  const GROUP = "__group__";
+  const [pick, setPick] = useState(groupIds.length ? GROUP : presetExpert ?? "");
   const lastId = useRef(0);
   const bottom = useRef<HTMLDivElement>(null);
 
@@ -206,7 +210,8 @@ export default function Chat() {
     const tier = TIERS[tierKey];
     const eligible = experts.filter((x) => x.id !== me?.id);
     // 골라 온 전문가가 지금 응대 불가(쉬는 중·불가 시간)면 자동 배정으로 신청한다
-    const pickOk = !pick || eligible.some((x) => x.id === pick);
+    const groupOnline = eligible.filter((x) => groupIds.includes(x.id)); // 고른 전문가 중 지금 온라인인 분
+    const pickOk = !pick || (pick === GROUP ? groupOnline.length > 0 : eligible.some((x) => x.id === pick));
     const pickGone = expertsLoaded && !pickOk;
     const pill = (on: boolean) => `rounded-xl border p-3 text-left transition ${on ? "border-rose-500 bg-rose-500/10" : "border-border bg-surface hover:border-white/20"}`;
     return (
@@ -236,6 +241,17 @@ export default function Chat() {
             <section>
               <h2 className="mb-2 text-sm font-semibold">2. 지금 답변 가능한 전문가 <span className="font-normal text-muted">(선택)</span></h2>
               <ul className="space-y-2">
+                {groupIds.length > 0 && (
+                  <li>
+                    <button type="button" onClick={() => setPick(GROUP)} className={`w-full ${pill(pick === GROUP && !pickGone)}`}>
+                      <b className="text-sm">⚡ 고른 전문가에게 동시에 요청 ({groupOnline.length}/{groupIds.length}명 온라인)</b>
+                      <span className="mt-1 flex flex-wrap gap-1">
+                        {groupOnline.map((x) => <span key={x.id} className="flex items-center gap-1 rounded-full border border-border py-0.5 pl-0.5 pr-2 text-xs"><Avatar name={x.name} url={x.photoUrl} size={18} />{x.name}</span>)}
+                      </span>
+                      <span className="mt-1 block text-xs text-muted">지금 온라인인 분들에게만 알림이 가고, 가장 먼저 참여한 분과 연결돼요</span>
+                    </button>
+                  </li>
+                )}
                 <li>
                   <button type="button" onClick={() => setPick("")} className={`w-full ${pill(pick === "" || pickGone)}`}>
                     <b className="text-sm">자동 배정</b>
@@ -268,8 +284,8 @@ export default function Chat() {
                   지금 응대 가능한 전문가가 없어요. 자동 배정으로 신청하면 쉬는 중이던 전문가가 돌아올 때까지 기다리고, {AUTO_REFUND_MINUTES}분 안에 아무도 참여하지 않으면 전액 환불돼요.
                 </p>
               )}
-              {pickGone && <p className="mt-1.5 rounded-lg border border-amber-500/20 bg-amber-500/10 p-2 text-xs text-amber-300">고른 전문가가 지금은 쉬는 중이라 목록에 없어요. 다른 전문가를 고르거나 자동 배정으로 신청해주세요.</p>}
-              {pick && pickOk && <p className="mt-1.5 text-xs text-muted">고른 전문가에게 먼저 알리고, 응답이 없으면 다른 전문가에게도 알려요.</p>}
+              {pickGone && <p className="mt-1.5 rounded-lg border border-amber-500/20 bg-amber-500/10 p-2 text-xs text-amber-300">{pick === GROUP ? "고른 전문가가 모두 지금은 쉬는 중이에요." : "고른 전문가가 지금은 쉬는 중이라 목록에 없어요."} 다른 전문가를 고르거나 자동 배정으로 신청해주세요.</p>}
+              {pick && pickOk && <p className="mt-1.5 text-xs text-muted">{pick === GROUP ? "고른 전문가들" : "고른 전문가"}에게 먼저 알리고, 5분 안에 아무도 참여하지 않으면 다른 온라인 전문가에게도 알려요.</p>}
             </section>
 
             <div className="rounded-xl border border-border bg-surface p-4 text-sm">
@@ -284,7 +300,7 @@ export default function Chat() {
             </div>
             {status.coins < tier.fee && <Link href="/coins" className="block rounded-lg border border-border py-2 text-center text-sm hover:border-white/30">코인 충전하러 가기</Link>}
             {err && <p className="text-sm text-rose-400">{err}</p>}
-            <button onClick={() => post("/api/consultations", { roomId, tier: tierKey, expertId: pickOk && pick ? pick : undefined })} className="w-full rounded-lg bg-rose-500 py-3 font-medium text-white hover:bg-rose-400">{won(tier.fee)} 결제하고 상담 시작</button>
+            <button onClick={() => post("/api/consultations", { roomId, tier: tierKey, ...(pickOk && pick === GROUP ? { expertIds: groupOnline.map((x) => x.id) } : { expertId: pickOk && pick ? pick : undefined }) })} className="w-full rounded-lg bg-rose-500 py-3 font-medium text-white hover:bg-rose-400">{won(tier.fee)} 결제하고 상담 시작</button>
           </>
         ) : (
           <p className="text-sm text-muted">질문 작성자가 상담을 시작하면 승인된 전문가가 참여할 수 있어요.</p>
@@ -351,7 +367,7 @@ export default function Chat() {
         {isAsker && open && !status.expertName && (
           <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-2 text-center text-xs text-amber-300">
             <p>
-              {status.preferredName ? <><b>{status.preferredName}</b> 전문가에게 먼저 요청했어요. </> : "전문가가 참여하길 기다리고 있어요. "}
+              {status.targetNames?.length ? <>고른 전문가 <b>{status.targetNames.join(", ")}</b>님 중 온라인인 분들에게 요청했어요. </> : status.preferredName ? <><b>{status.preferredName}</b> 전문가에게 먼저 요청했어요. </> : "전문가가 참여하길 기다리고 있어요. "}
               {status.deadline && <>응답 마감까지 <Countdown until={status.deadline} onDone={loadStatus} /></>}
             </p>
             <p className="mt-0.5 text-amber-300/80">{AUTO_REFUND_MINUTES}분 안에 참여하는 전문가가 없으면 자동으로 전액 환불돼요. 메시지를 남겨두면 참여한 전문가가 볼 수 있어요.</p>

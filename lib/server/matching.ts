@@ -22,6 +22,10 @@ const candidatesStmt = db.prepare(`
 `);
 const recentOfStmt = db.prepare(`SELECT COUNT(*) AS n FROM expert_calls WHERE user_id = ? AND created_at > datetime('now', '-1 hour')`);
 const preferredStmt = db.prepare(`SELECT id, name, expert_off_start, expert_off_end FROM users WHERE id = ? AND expert_status = 'approved' AND suspended_at IS NULL AND id != ?`);
+const targetsStmt = db.prepare(
+  `SELECT u.id, u.name, u.expert_off_start, u.expert_off_end FROM consult_targets t JOIN users u ON u.id = t.user_id
+   WHERE t.room_id = ? AND u.id != ? AND u.expert_status = 'approved' AND u.expert_available = 1 AND u.suspended_at IS NULL`,
+);
 const insertCall = db.prepare(`INSERT OR IGNORE INTO expert_calls (room_id, user_id, wave) VALUES (?, ?, ?)`);
 const calledCount = db.prepare(`SELECT COUNT(*) AS n FROM expert_calls WHERE room_id = ? AND wave = ?`);
 
@@ -33,12 +37,18 @@ const quietHoursKst = () => {
 
 /**
  * 상담이 열렸을 때 적합한 전문가에게 참여를 요청한다 (인앱 알림 + 카카오 알림톡).
- * wave 1: 지정 전문가가 있으면 그 전문가만, 없으면 후보 상위 N명. wave 2: 아직 호출하지 않은 다음 N명.
+ * wave 1: 질문자가 고른 전문가 그룹(지금 온라인인 사람만) → 지정 전문가 1명 → 없으면 후보 상위 N명.
+ * wave 2: 아직 호출하지 않은 다음 N명.
  * 호출한 전문가 수를 돌려준다.
  */
 export function callExperts(c: Consultation, category: string, wave: 1 | 2): number {
   const picked: Candidate[] = [];
 
+  if (wave === 1) {
+    // 질문자가 "지금 답변 가능한 전문가 찾기"로 고른 전문가들: 지금 ON이고 불가 시간이 아닌 사람에게만 알린다.
+    const targets = (targetsStmt.all(c.room_id, c.asker_id) as Candidate[]).filter((t) => !inOffHours(t.expert_off_start, t.expert_off_end));
+    if (targets.length > 0) return notifyPicked(c, category, wave, targets);
+  }
   if (wave === 1 && c.preferred_expert_id) {
     const p = preferredStmt.get(c.preferred_expert_id, c.asker_id) as Candidate | undefined;
     // 질문자가 직접 고른 전문가에게 먼저 기회를 준다. 응답이 없으면 wave 2에서 다른 전문가를 부른다.

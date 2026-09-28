@@ -29,6 +29,18 @@ export default function Experts() {
     return () => clearTimeout(t);
   }, [category, sort, q, onlyAvailable]);
 
+  // ⚡ 지금 바로 답변 가능한(온라인) 전문가를 찾아 모두 선택해 둔다(최대 10명)
+  const [now, setNow] = useState<E[] | null>(null);
+  const [sel, setSel] = useState<string[]>([]);
+  const findNow = async () => {
+    const sp = new URLSearchParams({ available: "1", sort: "rating" });
+    if (category) sp.set("category", category);
+    const r = await api<E[]>(`/api/experts?${sp}`);
+    const found = r.ok && Array.isArray(r.data) ? (r.data as unknown as E[]).slice(0, 10) : [];
+    setNow(found);
+    setSel(found.map((e) => e.id));
+  };
+
   return (
     <div>
       <div className="space-y-2 border-b border-border px-6 py-4 md:px-10">
@@ -48,6 +60,43 @@ export default function Experts() {
           ))}
         </div>
         <p className="text-[11px] text-muted">상담을 신청할 때 답변 등급을 고르면, 등급에 맞는 자료로 답변을 받아요.</p>
+        <button onClick={findNow} className="w-full rounded-lg bg-rose-500 py-2.5 text-sm font-medium text-white hover:bg-rose-400">
+          ⚡ 지금 바로 답변 가능한 전문가 찾기{category ? ` (${category})` : ""}
+        </button>
+        {now && (
+          <section className="space-y-2 rounded-xl border border-rose-500/40 bg-rose-500/5 p-3 text-sm" aria-label="지금 답변 가능한 전문가">
+            <div className="flex items-center justify-between">
+              <b>지금 온라인인 전문가 {now.length}명{category ? ` · ${category}` : ""}</b>
+              <button onClick={() => setNow(null)} className="text-xs text-muted hover:text-foreground">닫기</button>
+            </div>
+            {now.length === 0 ? (
+              <p className="text-xs text-muted">지금 상담을 켜 둔 전문가가 없어요. 잠시 후 다시 찾거나, 질문을 남기고 자동 배정으로 상담을 신청해보세요.</p>
+            ) : (
+              <>
+                <p className="text-xs text-muted">모두 자동으로 선택했어요. 빼고 싶은 분은 체크를 풀어주세요. 상담을 신청하면 <b>선택한 분 중 그때도 온라인인 분들에게만</b> 알림이 가요.</p>
+                <ul className="grid gap-1.5 sm:grid-cols-2">
+                  {now.map((e) => (
+                    <li key={e.id}>
+                      <label className={`flex cursor-pointer items-center gap-2 rounded-lg border p-2 ${sel.includes(e.id) ? "border-rose-500 bg-rose-500/10" : "border-border"}`}>
+                        <input type="checkbox" checked={sel.includes(e.id)} onChange={() => setSel((s) => (s.includes(e.id) ? s.filter((x) => x !== e.id) : [...s, e.id]))} />
+                        <Avatar name={e.name} url={e.photoUrl} size={32} />
+                        <span className="min-w-0 text-xs">
+                          <b className="text-sm">{e.name}</b> <span className="text-emerald-400">● 온라인</span>
+                          {e.salon && <span className="block truncate text-muted">🏢 {e.salon}</span>}
+                        </span>
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+                <Link href={sel.length ? `/ask?experts=${sel.join(",")}${category ? `&category=${encodeURIComponent(category)}` : ""}` : "#"}
+                  aria-disabled={sel.length === 0} onClick={(ev) => { if (sel.length === 0) ev.preventDefault(); }}
+                  className={`block rounded-lg py-2.5 text-center font-medium ${sel.length ? "bg-rose-500 text-white hover:bg-rose-400" : "cursor-not-allowed bg-white/10 text-muted"}`}>
+                  {sel.length ? `선택한 ${sel.length}명에게 질문하기` : "전문가를 한 명 이상 골라주세요"}
+                </Link>
+              </>
+            )}
+          </section>
+        )}
         <div className="flex items-center gap-3 text-xs">
           {SORTS.map(([k, label]) => <button key={k} onClick={() => setSort(k)} className={sort === k ? "font-bold text-rose-400" : "text-muted"}>{label}</button>)}
           <label className="ml-auto flex items-center gap-1 text-muted">

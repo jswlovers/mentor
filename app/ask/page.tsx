@@ -19,9 +19,11 @@ function Ask() {
   const { me } = useMe();
   const sp = useSearchParams();
   const expertId = sp.get("expert");
+  const groupParam = sp.get("experts"); // ⚡ 지금 답변 가능한 전문가 찾기로 고른 여러 명(쉼표 구분)
   const presetCategory = sp.get("category");
   const [category, setCategory] = useState<string>(presetCategory && (CATEGORIES as readonly string[]).includes(presetCategory) ? presetCategory : "펌");
   const [target, setTarget] = useState<Target | null>(null);
+  const [group, setGroup] = useState<Target[]>([]);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [hairType, setHairType] = useState("");
@@ -40,6 +42,14 @@ function Ask() {
     });
   }, [expertId, presetCategory]);
 
+  useEffect(() => {
+    const ids = (groupParam ?? "").split(",").filter(Boolean).slice(0, 10);
+    if (ids.length === 0) return;
+    Promise.all(ids.map((id) => api<Target>(`/api/experts/${encodeURIComponent(id)}`))).then((rs) => {
+      setGroup(rs.filter((r) => r.ok).map((r) => r.data as Target));
+    });
+  }, [groupParam]);
+
   if (me === null) return <p className="p-8 text-center text-sm">질문하려면 <Link href="/login" className="text-rose-400 underline">로그인</Link>이 필요해요.</p>;
 
   const submit = async (e: React.FormEvent) => {
@@ -53,11 +63,31 @@ function Ask() {
       if (!up.ok) alert(`질문은 등록됐지만 사진 업로드에 실패했어요: ${up.data.error}`);
     }
     // 전문가를 골라서 온 경우 바로 상담 신청 화면으로 이어간다
-    router.push(target ? `/chat/${r.data.id}?expert=${target.id}` : `/q/${r.data.id}`);
+    router.push(
+      group.length ? `/chat/${r.data.id}?experts=${group.map((g) => g.id).join(",")}`
+        : target ? `/chat/${r.data.id}?expert=${target.id}`
+        : `/q/${r.data.id}`,
+    );
   };
 
   return (
     <form onSubmit={submit} className="mx-auto max-w-xl space-y-4 px-6 py-8">
+      {group.length > 0 && (
+        <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm">
+          <div className="flex items-center justify-between gap-2">
+            <p>⚡ 지금 온라인인 전문가 <b>{group.length}명</b>에게 질문해요</p>
+            <Link href="/ask" className="shrink-0 text-xs text-muted underline">해제</Link>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {group.map((g) => (
+              <span key={g.id} className="flex items-center gap-1.5 rounded-full border border-border bg-surface py-0.5 pl-0.5 pr-2 text-xs">
+                <Avatar name={g.name} url={g.photoUrl} size={22} />{g.name}
+              </span>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-muted">등록하면 바로 상담 신청 화면으로 이어지고, 신청하면 이분들 중 그때도 온라인인 분들에게만 알림이 가요.</p>
+        </div>
+      )}
       {target && (
         <div className="flex items-center gap-3 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3">
           <Avatar name={target.name} url={target.photoUrl} size={48} />
@@ -89,7 +119,7 @@ function Ask() {
       </div>
       <p className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-2 text-xs text-amber-300">사진은 질문과 함께 <b>누구에게나 공개</b>돼요. 고객의 얼굴·이름·연락처가 보이지 않게 가리거나 잘라서 올려주세요.</p>
       {err && <p className="text-sm text-rose-400">{err}</p>}
-      <button className="w-full rounded-lg bg-rose-500 py-3 font-medium text-white hover:bg-rose-400">{target ? `질문 등록하고 ${target.name} 전문가에게 상담 신청` : "질문 등록 (무료)"}</button>
+      <button className="w-full rounded-lg bg-rose-500 py-3 font-medium text-white hover:bg-rose-400">{group.length ? `질문 등록하고 ${group.length}명에게 상담 신청` : target ? `질문 등록하고 ${target.name} 전문가에게 상담 신청` : "질문 등록 (무료)"}</button>
     </form>
   );
 }

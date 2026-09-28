@@ -1,13 +1,14 @@
+import { isAvailableNow } from "@/lib/server/availability";
 import { db } from "@/lib/server/db";
 import { RESPONSE_STAT_MIN_SAMPLES } from "@/lib/server/pricing";
 
 type Row = {
-  id: string; name: string; expert_headline: string | null; expert_bio: string | null; expert_available: number; created_at: string;
+  id: string; name: string; expert_headline: string | null; expert_bio: string | null; expert_available: number; expert_off_start: string | null; expert_off_end: string | null; created_at: string;
   rating: number | null; review_count: number; done: number; resp_n: number; resp_avg: number | null;
 };
 
 const listStmt = db.prepare(`
-  SELECT u.id, u.name, u.expert_headline, u.expert_bio, u.expert_available, u.created_at,
+  SELECT u.id, u.name, u.expert_headline, u.expert_bio, u.expert_available, u.expert_off_start, u.expert_off_end, u.created_at,
     (SELECT AVG(rating) FROM reviews r WHERE r.expert_id = u.id) AS rating,
     (SELECT COUNT(*) FROM reviews r WHERE r.expert_id = u.id) AS review_count,
     (SELECT COUNT(*) FROM consultations c WHERE c.expert_id = u.id AND c.status = 'ended') AS done,
@@ -37,7 +38,8 @@ export async function GET(req: Request) {
     headline: r.expert_headline,
     bio: (r.expert_bio ?? "").slice(0, 120),
     categories: cats.get(r.id) ?? [],
-    available: !!r.expert_available,
+    available: isAvailableNow(r), // ON이고 상담 불가 시간이 아닐 때
+    offHours: r.expert_off_start && r.expert_off_end ? `${r.expert_off_start}~${r.expert_off_end}` : null,
     rating: r.rating === null ? null : Math.round(r.rating * 10) / 10,
     reviewCount: r.review_count,
     consultations: r.done,

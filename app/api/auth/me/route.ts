@@ -1,3 +1,4 @@
+import { getAvailability } from "@/lib/server/availability";
 import { getBalance, getEarnings } from "@/lib/server/coins";
 import { db } from "@/lib/server/db";
 import { getUser } from "@/lib/server/http";
@@ -19,6 +20,8 @@ export async function GET(req: Request) {
       phoneVerified: !!ph.phone_verified_at,
       notifyKakao: !!ph.notify_kakao,
       unread: (unreadStmt.get(user.id) as { c: number }).c,
+      // 전문가 상담 ON/OFF 상태(헤더 토글용)
+      availability: user.isExpert ? getAvailability(user.id) : null,
     },
   });
 }

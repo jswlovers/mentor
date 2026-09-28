@@ -1,11 +1,28 @@
 "use client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { api, useMe } from "@/lib/client";
+import { useEffect } from "react";
+import { api, jsonInit, notifyMeChanged, useMe } from "@/lib/client";
 
 export default function Header() {
   const { me, refresh } = useMe();
   const router = useRouter();
+
+  // 전문가 상담 ON/OFF 토글. 상담 불가 시간이면 ON이어도 쉬는 중으로 보여준다.
+  const av = me?.availability ?? null;
+  const toggleConsult = async () => {
+    if (!av) return;
+    const r = await api("/api/experts/availability", jsonInit("POST", { on: !av.on }));
+    if (!r.ok) alert(r.data.error || "변경하지 못했어요");
+    notifyMeChanged();
+  };
+  // 불가 시간이 시작·끝나면 표시가 바뀌도록 전문가는 1분마다 다시 불러온다
+  const isExpert = !!av;
+  useEffect(() => {
+    if (!isExpert) return;
+    const t = setInterval(refresh, 60_000);
+    return () => clearInterval(t);
+  }, [isExpert, refresh]);
 
   const logout = async () => {
     await api("/api/auth/logout", { method: "POST" });
@@ -20,6 +37,12 @@ export default function Header() {
         <div className="flex items-center gap-2 text-sm">
           {me ? (
             <>
+              {av && (
+                <button onClick={toggleConsult} title={av.offNow ? `상담 불가 시간(${av.offStart}~${av.offEnd})이라 요청을 받지 않아요. 누르면 ${av.on ? "OFF로" : "ON으로"} 바꿔요` : `누르면 상담 ${av.on ? "OFF" : "ON"}`}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${av.availableNow ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300" : av.on && av.offNow ? "border-amber-500/40 bg-amber-500/10 text-amber-300" : "border-border text-muted"}`}>
+                  {av.availableNow ? "● 상담 ON" : av.on && av.offNow ? "🌙 불가 시간" : "○ 상담 OFF"}
+                </button>
+              )}
               <Link href="/notifications" className="relative rounded-full border border-border px-3 py-1.5 text-foreground/80 transition hover:border-white/25" aria-label="알림">
                 🔔{me.unread > 0 && <span className="absolute -right-1 -top-1 min-w-[18px] rounded-full bg-rose-500 px-1 text-center text-[11px] leading-[18px] text-white">{me.unread > 99 ? "99+" : me.unread}</span>}
               </Link>

@@ -5,7 +5,7 @@ import { api, CATEGORIES, won } from "@/lib/client";
 import { TIER_KEYS, TIERS } from "@/lib/server/pricing";
 
 type E = {
-  id: string; name: string; headline: string | null; bio: string; categories: string[]; available: boolean;
+  id: string; name: string; headline: string | null; bio: string; categories: string[]; available: boolean; offHours: string | null;
   rating: number | null; reviewCount: number; consultations: number; avgResponseMinutes: number | null;
 };
 const SORTS = [["rating", "평점순"], ["responses", "상담 많은 순"], ["recent", "신규순"]] as const;
@@ -62,6 +62,7 @@ export default function Experts() {
                 <b>{e.name}</b>
                 <span className="rounded bg-rose-500/15 px-1.5 py-0.5 text-[11px] text-rose-300">검증 전문가</span>
                 <span className={`text-[11px] ${e.available ? "text-emerald-400" : "text-muted"}`}>{e.available ? "● 응대 가능" : "○ 쉬는 중"}</span>
+                {e.offHours && <span className="text-[11px] text-muted">🌙 {e.offHours} 불가</span>}
               </div>
               {e.headline && <p className="mt-0.5 text-sm">{e.headline}</p>}
               <p className="mt-0.5 line-clamp-2 text-xs text-muted">{e.bio}</p>

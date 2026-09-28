@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { api, CATEGORIES, jsonInit, useMe } from "@/lib/client";
+import ConsultAvailability from "./ConsultAvailability";
 
 type Earn = {
   earnings: number; shares: { label: string; pct: number }[]; minWithdraw: number;
@@ -23,7 +24,6 @@ export default function Expert() {
   const [bank, setBank] = useState("");
   const [msg, setMsg] = useState("");
   const [cats, setCats] = useState<string[]>([]);
-  const [available, setAvailable] = useState(true);
   const [headline, setHeadline] = useState("");
   const [smsg, setSmsg] = useState("");
 
@@ -36,8 +36,8 @@ export default function Expert() {
     if (me?.isExpert) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       load();
-      api<{ categories: string[]; available: boolean; headline: string }>("/api/experts/settings").then((r) => {
-        if (r.ok) { setCats(r.data.categories); setAvailable(r.data.available); setHeadline(r.data.headline); }
+      api<{ categories: string[]; headline: string }>("/api/experts/settings").then((r) => {
+        if (r.ok) { setCats(r.data.categories); setHeadline(r.data.headline); }
       });
     }
   }, [me?.isExpert, load]);
@@ -107,16 +107,16 @@ export default function Expert() {
   };
 
   const saveSettings = async () => {
-    const r = await api("/api/experts/settings", jsonInit("POST", { categories: cats, available, headline }));
+    const r = await api("/api/experts/settings", jsonInit("POST", { categories: cats, headline }));
     setSmsg(r.ok ? "저장했어요." : r.data.error || "저장에 실패했어요");
   };
 
   return (
     <div className="mx-auto max-w-xl space-y-5 px-6 py-8">
+      {me.availability && <ConsultAvailability av={me.availability} />}
       <section className="space-y-2 rounded-xl border border-border bg-surface p-4 text-sm">
         <h2 className="font-semibold">상담 호출 설정</h2>
         <p className="text-xs text-muted">질문자가 상담을 열면 담당 분야와 맞는 전문가에게 알림이 가요. 분야를 하나도 고르지 않으면 모든 분야 요청을 받아요. (시간당 최대 3건, 카카오톡은 08~23시에만)</p>
-        <label className="flex items-center gap-2"><input type="checkbox" checked={available} onChange={(e) => setAvailable(e.target.checked)} /> 지금 상담 요청 받기 (끄면 호출·목록에서 &apos;쉬는 중&apos;)</label>
         <div className="flex flex-wrap gap-2">
           {CATEGORIES.map((c) => (
             <button key={c} type="button" onClick={() => setCats((p) => (p.includes(c) ? p.filter((x) => x !== c) : [...p, c]))} className={`rounded-full border px-3 py-1 text-xs transition ${cats.includes(c) ? "border-rose-500 bg-rose-500 text-white" : "border-border text-muted hover:text-foreground"}`}>{c}</button>

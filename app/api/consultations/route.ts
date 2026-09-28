@@ -1,3 +1,4 @@
+import { type AvailabilityRow, isAvailableNow } from "@/lib/server/availability";
 import { chargeAsker, getConsultation, isValidRoomId, roleOf } from "@/lib/server/consult";
 import { getBalance, InsufficientCoinsError } from "@/lib/server/coins";
 import { commissionPct, expertShareOf } from "@/lib/server/commission";
@@ -8,7 +9,7 @@ import { AUTO_REFUND_MINUTES, DEFAULT_TIER, isTier, TIERS } from "@/lib/server/p
 
 const qStmt = db.prepare(`SELECT asker_id, category FROM questions WHERE id = ?`);
 const expertStmt = db.prepare(
-  `SELECT expert_available FROM users WHERE id = ? AND expert_status = 'approved' AND suspended_at IS NULL`,
+  `SELECT expert_available, expert_off_start, expert_off_end FROM users WHERE id = ? AND expert_status = 'approved' AND suspended_at IS NULL`,
 );
 const setPreferred = db.prepare(`UPDATE consultations SET preferred_expert_id = ? WHERE room_id = ?`);
 const reviewedStmt = db.prepare(`SELECT 1 AS x FROM reviews WHERE room_id = ?`);
@@ -64,9 +65,9 @@ export async function POST(req: Request) {
   if (getConsultation(roomId)) return Response.json({ error: "이미 상담이 시작된 질문이에요" }, { status: 409 });
   const preferred = expertId ? String(expertId) : null;
   if (preferred) {
-    const e = expertStmt.get(preferred) as { expert_available: number } | undefined;
+    const e = expertStmt.get(preferred) as AvailabilityRow | undefined;
     if (!e || preferred === user.id) return Response.json({ error: "지정할 수 없는 전문가예요" }, { status: 400 });
-    if (!e.expert_available) return Response.json({ error: "지금은 쉬는 중인 전문가예요. 다른 전문가를 골라주세요" }, { status: 400 });
+    if (!isAvailableNow(e)) return Response.json({ error: "지금은 쉬는 중인 전문가예요. 다른 전문가를 골라주세요" }, { status: 400 });
   }
 
   db.exec("BEGIN");

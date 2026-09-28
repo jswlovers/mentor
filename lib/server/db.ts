@@ -295,6 +295,8 @@ try { db.exec(`ALTER TABLE users ADD COLUMN expert_years INTEGER`); } catch {}
 try { db.exec(`ALTER TABLE users ADD COLUMN expert_salon TEXT`); } catch {}
 try { db.exec(`ALTER TABLE users ADD COLUMN expert_license_no TEXT`); } catch {}
 try { db.exec(`ALTER TABLE users ADD COLUMN expert_license_file TEXT`); } catch {}
+// 상담 난이도(basic | normal | hard). 난이도 도입 전 상담은 모두 5만원(일반)이었다.
+try { db.exec(`ALTER TABLE consultations ADD COLUMN difficulty TEXT NOT NULL DEFAULT 'normal'`); } catch {}
 // 기존 회원(가입 당시 phone이 없던 계정)은 NULL을 허용하고, 값이 있으면 중복을 막는다.
 db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone ON users(phone) WHERE phone IS NOT NULL`);
 

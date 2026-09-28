@@ -3,7 +3,10 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, jsonInit, useMe, won } from "@/lib/client";
-import { ATTACHMENT_COST, CONSULT_START_FEE, COST_PER_SEC, EXPERT_SHARE, MAX_MESSAGE_CHARS, MESSAGE_PER_CHAR, messageCost } from "@/lib/server/pricing";
+import {
+  ATTACHMENT_COST, AUTO_REFUND_MINUTES, canHandle, COST_PER_SEC, DEFAULT_DIFFICULTY, DIFFICULTIES, DIFFICULTY_KEYS, type Difficulty,
+  EXPERT_SHARE, MAX_MESSAGE_CHARS, MESSAGE_PER_CHAR, messageCost,
+} from "@/lib/server/pricing";
 
 type Msg = {
   id: number; sender_id: string; sender_name: string; body: string;
@@ -12,7 +15,25 @@ type Msg = {
 type Status = {
   started: boolean; status: "open" | "ended" | "cancelled" | null; role: "asker" | "expert" | "viewer";
   canJoin: boolean; isQuestionOwner: boolean; category: string; expertName: string | null; expertId: string | null; reviewed: boolean; askerName: string | null; coins: number;
+  difficulty: Difficulty | null; fee: number | null; deadline: string | null; preferredName: string | null;
 };
+type Expert = {
+  id: string; name: string; headline: string | null; rating: number | null; reviewCount: number; available: boolean;
+  years: number | null; consultations: number; avgResponseMinutes: number | null;
+};
+
+/** 응답 마감까지 남은 시간(mm:ss). 1초마다 갱신하고, 10초마다·마감 시 상태를 다시 불러온다. */
+function Countdown({ until, onDone }: { until: string; onDone: () => void }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    const s = setInterval(onDone, 10_000);
+    return () => { clearInterval(t); clearInterval(s); };
+  }, [onDone]);
+  const left = Math.max(0, Math.round((Date.parse(until) - now) / 1000));
+  useEffect(() => { if (left === 0) onDone(); }, [left, onDone]);
+  return <b className="tabular-nums">{Math.floor(left / 60)}:{String(left % 60).padStart(2, "0")}</b>;
+}
 type Call = { url: string; type: "voice" | "video" };
 
 function Attachment({ m }: { m: Msg }) {
@@ -70,7 +91,8 @@ export default function Chat() {
   const [call, setCall] = useState<Call | null>(null);
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState("");
-  const [experts, setExperts] = useState<{ id: string; name: string; headline: string | null; rating: number | null }[]>([]);
+  const [experts, setExperts] = useState<Expert[]>([]);
+  const [difficulty, setDifficulty] = useState<Difficulty>(DEFAULT_DIFFICULTY);
   const [pick, setPick] = useState("");
   const lastId = useRef(0);
   const bottom = useRef<HTMLDivElement>(null);
@@ -89,14 +111,17 @@ export default function Chat() {
 
   const participant = !!status && status.started && status.role !== "viewer";
 
-  // 상담 시작 전, 질문 분야에 맞는 전문가 목록(지정용)
+  // 상담 시작 전, 질문 분야에 맞고 지금 응대 가능한 전문가 목록(지정용). 30초마다 갱신한다.
   const startPending = !!status && !status.started && status.isQuestionOwner;
   const category = status?.category;
   useEffect(() => {
     if (!startPending || !category) return;
-    api<{ id: string; name: string; headline: string | null; rating: number | null }[]>(`/api/experts?category=${encodeURIComponent(category)}`).then((r) => {
+    const load = () => api<Expert[]>(`/api/experts?available=1&category=${encodeURIComponent(category)}`).then((r) => {
       if (r.ok && Array.isArray(r.data)) setExperts(r.data as never);
     });
+    load();
+    const t = setInterval(load, 30_000);
+    return () => clearInterval(t);
   }, [startPending, category]);
 
   // 3초마다 새 메시지를 가져온다 (포레스트클럽과 같은 폴링 방식).
@@ -164,32 +189,85 @@ export default function Chat() {
 
   // ── 상담 시작 전 ──
   if (!status.started) {
+    const tier = DIFFICULTIES[difficulty];
+    const eligible = experts.filter((x) => x.id !== me?.id && canHandle(x.years, difficulty));
+    const choose = (d: Difficulty) => {
+      setDifficulty(d);
+      // 고른 전문가가 새 난이도를 맡을 수 없으면 선택을 푼다
+      if (pick && !experts.some((x) => x.id === pick && canHandle(x.years, d))) setPick("");
+    };
+    const pill = (on: boolean) => `rounded-xl border p-3 text-left transition ${on ? "border-rose-500 bg-rose-500/10" : "border-border bg-surface hover:border-white/20"}`;
     return (
       <div className="mx-auto max-w-xl space-y-4 px-6 py-8">
-        <h1 className="text-lg font-bold">전문가 상담 신청</h1>
+        <h1 className="text-lg font-bold">실시간 전문가 상담 신청</h1>
         {status.isQuestionOwner ? (
           <>
+            <section>
+              <h2 className="mb-2 text-sm font-semibold">1. 질문 난이도</h2>
+              <div className="grid grid-cols-3 gap-2">
+                {DIFFICULTY_KEYS.map((d) => {
+                  const t = DIFFICULTIES[d];
+                  const n = experts.filter((x) => x.id !== me?.id && canHandle(x.years, d)).length;
+                  return (
+                    <button type="button" key={d} onClick={() => choose(d)} className={pill(difficulty === d)}>
+                      <b className="block text-sm">{t.label}</b>
+                      <span className="block text-sm text-rose-300">{won(t.fee)}</span>
+                      <span className="mt-1 block text-[11px] text-muted">{t.minYears > 0 ? `경력 ${t.minYears}년+` : "경력 무관"} · 응대 가능 {n}명</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-1.5 text-xs text-muted">{tier.label}: {tier.desc}</p>
+            </section>
+
+            <section>
+              <h2 className="mb-2 text-sm font-semibold">2. 지금 답변 가능한 전문가 <span className="font-normal text-muted">(선택)</span></h2>
+              <ul className="space-y-2">
+                <li>
+                  <button type="button" onClick={() => setPick("")} className={`w-full ${pill(pick === "")}`}>
+                    <b className="text-sm">자동 배정</b>
+                    <span className="block text-xs text-muted">응대 가능한 전문가 여러 명에게 동시에 알려 가장 먼저 참여한 분과 연결해요</span>
+                  </button>
+                </li>
+                {eligible.map((x) => (
+                  <li key={x.id}>
+                    <button type="button" onClick={() => setPick(x.id)} className={`w-full ${pill(pick === x.id)}`}>
+                      <span className="flex items-center gap-1.5 text-sm">
+                        <b>{x.name}</b>
+                        <span className="text-[11px] text-emerald-400">● 응대 가능</span>
+                        {x.years !== null && <span className="text-[11px] text-muted">경력 {x.years}년</span>}
+                      </span>
+                      {x.headline && <span className="block text-xs">{x.headline}</span>}
+                      <span className="block text-xs text-muted">
+                        {x.rating !== null ? <><span className="text-amber-400">★</span> {x.rating.toFixed(1)} ({x.reviewCount})</> : "후기 없음"}
+                        {` · 상담 ${x.consultations}건`}
+                        {x.avgResponseMinutes !== null && ` · 평균 응답 ${x.avgResponseMinutes}분`}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              {eligible.length === 0 && (
+                <p className="mt-2 rounded-lg border border-amber-500/20 bg-amber-500/10 p-2 text-xs text-amber-300">
+                  지금 {tier.label} 질문을 맡을 수 있는 응대 가능 전문가가 없어요. 자동 배정으로 신청하면 쉬는 중이던 전문가가 돌아올 때까지 기다리고, {AUTO_REFUND_MINUTES}분 안에 아무도 참여하지 않으면 전액 환불돼요.
+                </p>
+              )}
+              {pick && <p className="mt-1.5 text-xs text-muted">고른 전문가에게 먼저 알리고, 응답이 없으면 다른 전문가에게도 알려요.</p>}
+            </section>
+
             <div className="rounded-xl border border-border bg-surface p-4 text-sm">
-              <p>상담 시작비 <b>{won(CONSULT_START_FEE)}</b> 를 결제하면 채팅과 통화를 시작할 수 있어요.</p>
+              <p><b>{AUTO_REFUND_MINUTES}분 안에 응답</b>을 약속해요. 그 안에 참여하는 전문가가 없으면 자동으로 취소되고 전액 환불돼요.</p>
               <ul className="mt-2 list-disc space-y-0.5 pl-5 text-xs text-muted">
+                <li>상담 시작비 {tier.label} <b>{won(tier.fee)}</b> (신청할 때 1회)</li>
                 <li>쪽지 글자당 {MESSAGE_PER_CHAR}코인 (최소 500코인, 1회 {MAX_MESSAGE_CHARS}자 이내)</li>
                 <li>보이스톡 초당 {COST_PER_SEC.voice}코인 · 페이스톡 초당 {COST_PER_SEC.video}코인</li>
-                <li>전문가가 참여하기 전에는 언제든 전액 환불로 취소할 수 있어요. 일정 시간 안에 참여하지 않으면 자동으로 취소·전액 환불돼요.</li>
+                <li>전문가가 참여하기 전에는 언제든 전액 환불로 취소할 수 있어요.</li>
               </ul>
               <p className="mt-3">내 코인: <b>{status.coins.toLocaleString()}</b></p>
             </div>
-            {status.coins < CONSULT_START_FEE && <Link href="/coins" className="block rounded-lg border border-border py-2 text-center text-sm hover:border-white/30">코인 충전하러 가기</Link>}
+            {status.coins < tier.fee && <Link href="/coins" className="block rounded-lg border border-border py-2 text-center text-sm hover:border-white/30">코인 충전하러 가기</Link>}
             {err && <p className="text-sm text-rose-400">{err}</p>}
-            {experts.length > 0 && (
-              <label className="block text-sm">
-                <span className="mb-1 block text-xs text-muted">원하는 전문가를 지정하면 그분께 먼저 알려요 (선택)</span>
-                <select className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-foreground" value={pick} onChange={(e) => setPick(e.target.value)}>
-                  <option value="">지정 안 함 (적합한 전문가에게 자동 호출)</option>
-                  {experts.map((x) => <option key={x.id} value={x.id}>{x.name}{x.rating !== null ? ` ★${x.rating.toFixed(1)}` : ""}{x.headline ? ` · ${x.headline}` : ""}</option>)}
-                </select>
-              </label>
-            )}
-            <button onClick={() => post("/api/consultations", { roomId, expertId: pick || undefined })} className="w-full rounded-lg bg-rose-500 py-3 font-medium text-white hover:bg-rose-400">{won(CONSULT_START_FEE)} 결제하고 상담 시작</button>
+            <button onClick={() => post("/api/consultations", { roomId, difficulty, expertId: pick || undefined })} className="w-full rounded-lg bg-rose-500 py-3 font-medium text-white hover:bg-rose-400">{won(tier.fee)} 결제하고 상담 시작</button>
           </>
         ) : (
           <p className="text-sm text-muted">질문 작성자가 상담을 시작하면 승인된 전문가가 참여할 수 있어요.</p>
@@ -205,12 +283,19 @@ export default function Chat() {
         <h1 className="text-lg font-bold">1:1 상담</h1>
         {status.canJoin ? (
           <>
-            <p className="text-sm text-muted">{status.askerName}님이 상담을 신청했어요. 참여하면 질문자가 낸 금액의 {Math.round(EXPERT_SHARE * 100)}%가 수익으로 쌓여요.</p>
+            <p className="text-sm text-muted">
+              {status.askerName}님이 {status.difficulty && <b className="text-foreground">{DIFFICULTIES[status.difficulty].label}</b>} 상담을 신청했어요. 참여하면 질문자가 낸 금액의 {Math.round(EXPERT_SHARE * 100)}%가 수익으로 쌓여요.
+              {status.deadline && <> 응답 마감까지 <Countdown until={status.deadline} onDone={loadStatus} /></>}
+            </p>
             {err && <p className="text-sm text-rose-400">{err}</p>}
             <button onClick={() => post(`/api/consultations/${roomId}/join`)} className="w-full rounded-lg bg-rose-500 py-3 font-medium text-white hover:bg-rose-400">전문가로 상담 참여</button>
           </>
         ) : (
-          <p className="text-sm text-muted">이 상담은 참여자만 볼 수 있어요.</p>
+          <p className="text-sm text-muted">
+            {status.deadline && status.difficulty && me?.isExpert
+              ? `${DIFFICULTIES[status.difficulty].label} 상담은 경력 ${DIFFICULTIES[status.difficulty].minYears}년 이상 전문가만 참여할 수 있어요.`
+              : "이 상담은 참여자만 볼 수 있어요."}
+          </p>
         )}
       </div>
     );
@@ -240,7 +325,15 @@ export default function Chat() {
         </span>
       </div>
       <div className="flex-1 space-y-2 overflow-y-auto bg-surface p-3">
-        {isAsker && open && !status.expertName && <p className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-2 text-center text-xs text-amber-300">전문가가 참여하길 기다리고 있어요. 메시지를 남겨두면 참여한 전문가가 볼 수 있어요.</p>}
+        {isAsker && open && !status.expertName && (
+          <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-2 text-center text-xs text-amber-300">
+            <p>
+              {status.preferredName ? <><b>{status.preferredName}</b> 전문가에게 먼저 요청했어요. </> : "전문가가 참여하길 기다리고 있어요. "}
+              {status.deadline && <>응답 마감까지 <Countdown until={status.deadline} onDone={loadStatus} /></>}
+            </p>
+            <p className="mt-0.5 text-amber-300/80">{AUTO_REFUND_MINUTES}분 안에 참여하는 전문가가 없으면 자동으로 전액 환불돼요. 메시지를 남겨두면 참여한 전문가가 볼 수 있어요.</p>
+          </div>
+        )}
         {!open && <p className="rounded-lg bg-white/5 p-2 text-center text-xs text-muted">{status.status === "cancelled" ? "취소된 상담이에요 (전액 환불)" : "종료된 상담이에요"}</p>}
         {msgs.map((m) => {
           const mine = m.sender_id === me?.id;

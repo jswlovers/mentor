@@ -1,6 +1,7 @@
 import { db } from "./db";
 import { debitCoins, refundFromRevenue, settleToExpert } from "./coins";
 import type { User } from "./http";
+import { canHandle, type Difficulty } from "./pricing";
 
 export type Consultation = {
   room_id: string;
@@ -14,9 +15,11 @@ export type Consultation = {
   ended_at: string | null;
   claimed_at: string | null;
   preferred_expert_id: string | null;
+  difficulty: Difficulty;
 };
 
 const getStmt = db.prepare(`SELECT * FROM consultations WHERE room_id = ?`);
+const yearsStmt = db.prepare(`SELECT expert_years FROM users WHERE id = ?`);
 const claimStmt = db.prepare(
   `UPDATE consultations SET expert_id = ?, expert_name = ?, claimed_at = datetime('now') WHERE room_id = ? AND expert_id IS NULL AND status = 'open'`,
 );
@@ -26,6 +29,10 @@ const spendStmt = db.prepare(
 
 export const getConsultation = (roomId: string) => getStmt.get(roomId) as Consultation | undefined;
 export const isValidRoomId = (id: unknown): id is string => typeof id === "string" && /^[\w-]{1,64}$/.test(id);
+
+/** 이 전문가의 경력으로 상담 난이도를 맡을 수 있는지 */
+export const expertCanHandle = (c: Consultation, expertId: string) =>
+  canHandle((yearsStmt.get(expertId) as { expert_years: number | null } | undefined)?.expert_years, c.difficulty);
 
 const roomTag = (roomId: string) => `(질문 ${roomId})`;
 
@@ -47,7 +54,7 @@ export function chargeAsker(c: Consultation, amount: number, type: string, note:
  * 한꺼번에 정산한다. 트랜잭션 안에서 호출한다. 새로 배정됐으면 true.
  */
 export function claimExpert(c: Consultation, expert: User) {
-  if (c.expert_id || c.status !== "open" || !expert.isExpert || expert.id === c.asker_id) return false;
+  if (c.expert_id || c.status !== "open" || !expert.isExpert || expert.id === c.asker_id || !expertCanHandle(c, expert.id)) return false;
   const res = claimStmt.run(expert.id, expert.name, c.room_id);
   if (Number(res.changes) === 0) return false;
   const spent = (spendStmt.get(`user:${c.asker_id}`, roomTag(c.room_id)) as { total: number }).total;

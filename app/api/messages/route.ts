@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { getBalance, InsufficientCoinsError } from "@/lib/server/coins";
-import { chargeAsker, claimExpert, getConsultation, isValidRoomId, roleOf } from "@/lib/server/consult";
+import { chargeAsker, claimExpert, expertCanHandle, getConsultation, isValidRoomId, roleOf } from "@/lib/server/consult";
 import { DATA_DIR, db } from "@/lib/server/db";
 import { forbidden, getUser, limited, unauthorized } from "@/lib/server/http";
 import {
@@ -70,7 +70,7 @@ export async function POST(req: Request) {
   if (consult.status !== "open") return Response.json({ error: "종료된 상담이에요" }, { status: 409 });
   // 참여자는 질문자와 배정된 전문가뿐. 배정 전이면 승인된 전문가가 첫 메시지를 보내며 참여한다.
   const role = roleOf(consult, user);
-  const willClaim = role === "viewer" && !consult.expert_id && user.isExpert;
+  const willClaim = role === "viewer" && !consult.expert_id && user.isExpert && expertCanHandle(consult, user.id);
   if (role === "viewer" && !willClaim) return forbidden("이 상담의 참여자가 아니에요");
   const billed = role === "asker"; // 과금은 질문자만
 

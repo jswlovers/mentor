@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { api, jsonInit, useMe } from "@/lib/client";
-import { ATTACHMENT_COST, CONSULT_START_FEE, COST_PER_SEC, MAX_MESSAGE_CHARS, MESSAGE_MIN_COST, MESSAGE_PER_CHAR, MIN_CHARGE_KRW } from "@/lib/server/pricing";
+import { ATTACHMENT_COST, COST_PER_SEC, DIFFICULTIES, DIFFICULTY_KEYS, MAX_MESSAGE_CHARS, MESSAGE_MIN_COST, MESSAGE_PER_CHAR, MIN_CHARGE_KRW } from "@/lib/server/pricing";
 
 type Charge = { id: number; amount_krw: number; coins: number; status: string; provider: string; depositor: string | null; admin_note: string | null; created_at: string };
 declare global { interface Window { TossPayments?: (key: string) => { payment: (o: { customerKey: string }) => { requestPayment: (o: Record<string, unknown>) => Promise<void> } } } }
@@ -82,7 +82,7 @@ export default function Coins() {
       <section className="rounded-xl border border-border bg-surface p-4 text-sm">
         <h2 className="mb-2 font-semibold">요금 안내</h2>
         <ul className="space-y-1 text-foreground/80">
-          <li>상담 시작비: <b>{won(CONSULT_START_FEE)}</b> (상담 신청 시 1회)</li>
+          <li>상담 시작비 (상담 신청 시 1회, 난이도별): {DIFFICULTY_KEYS.map((d, i) => <span key={d}>{i > 0 && " · "}{DIFFICULTIES[d].label} <b>{won(DIFFICULTIES[d].fee)}</b></span>)}</li>
           <li>쪽지: 글자당 {MESSAGE_PER_CHAR}코인, 최소 {won(MESSAGE_MIN_COST)} (1회 {MAX_MESSAGE_CHARS}자 이내, 사진·파일 +{won(ATTACHMENT_COST)})</li>
           <li>보이스톡: 초당 {COST_PER_SEC.voice}코인 (분당 {(COST_PER_SEC.voice * 60).toLocaleString()})</li>
           <li>페이스톡: 초당 {COST_PER_SEC.video}코인 (분당 {(COST_PER_SEC.video * 60).toLocaleString()})</li>

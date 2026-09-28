@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useMe, won } from "@/lib/client";
-import { CONSULT_START_FEE, COST_PER_SEC, EXPERT_SHARE } from "@/lib/server/pricing";
+import { AUTO_REFUND_MINUTES, CONSULT_FEE_MAX, CONSULT_FEE_MIN, COST_PER_SEC, EXPERT_SHARE } from "@/lib/server/pricing";
 
 const STEPS = [
   {
@@ -20,7 +20,7 @@ const STEPS = [
     n: 3,
     title: "급하면 1:1 상담",
     badge: "코인",
-    body: `전문가와 채팅·보이스톡·페이스톡으로 바로 해결해요. 상담 시작비 ${won(CONSULT_START_FEE)}, 전문가가 참여하기 전에는 전액 환불로 취소할 수 있어요.`,
+    body: `전문가와 채팅·보이스톡·페이스톡으로 바로 해결해요. 난이도별 상담 시작비 ${won(CONSULT_FEE_MIN)}~${won(CONSULT_FEE_MAX)}, ${AUTO_REFUND_MINUTES}분 안에 전문가가 참여하지 않으면 전액 환불돼요.`,
   },
 ];
 

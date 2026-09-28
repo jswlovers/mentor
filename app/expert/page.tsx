@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, CATEGORIES, jsonInit, useMe } from "@/lib/client";
 
 type Earn = {
-  earnings: number; share: number; minWithdraw: number;
+  earnings: number; shares: { label: string; pct: number }[]; minWithdraw: number;
   ledger: { id: number; direction: "debit" | "credit"; amount: number; note: string | null; created_at: string }[];
   withdrawals: { id: number; amount: number; bank_info: string; status: string; admin_note: string | null; created_at: string }[];
 };
@@ -129,7 +129,7 @@ export default function Expert() {
       <section className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-4">
         <p className="text-xs text-emerald-300">출금 가능 수익 (코인 = 원)</p>
         <p className="text-3xl font-bold">{data ? data.earnings.toLocaleString() : "…"}</p>
-        {data && <p className="mt-1 text-[11px] text-muted">상담에서 질문자가 낸 금액의 {Math.round(data.share * 100)}%가 쌓여요. 최소 출금 {data.minWithdraw.toLocaleString()}코인.</p>}
+        {data && <p className="mt-1 text-[11px] text-muted">상담에서 질문자가 낸 금액 중 {data.shares.map((s) => `${s.label} ${s.pct}%`).join(" · ")}가 쌓여요. 최소 출금 {data.minWithdraw.toLocaleString()}코인.</p>}
       </section>
       <form onSubmit={withdraw} className="space-y-2 rounded-xl border border-border bg-surface p-4">
         <h2 className="text-sm font-semibold">출금 신청</h2>

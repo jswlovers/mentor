@@ -11,7 +11,8 @@ type Overview = {
   users: { id: string; username: string; name: string; role: string; expert_status: string; suspended_at: string | null }[];
   ledger: { id: number; account: string; direction: string; amount: number; type: string; note: string | null; created_at: string }[];
 };
-const TABS = ["충전", "전문가", "출금", "문의", "회원", "원장", "메시지"] as const;
+const TABS = ["충전", "전문가", "출금", "문의", "회원", "수수료", "원장", "메시지"] as const;
+type Commission = { tier: string; label: string; fee: number; pct: number; updatedBy: string | null; updatedAt: string | null };
 type MsgData = { stats: { total: number; verified: number; consented: number }; log: { id: number; channel: string; kind: string; text: string; status: string; created_at: string; user_name: string | null; username: string | null }[] };
 
 export default function Admin() {
@@ -22,10 +23,19 @@ export default function Admin() {
   const [md, setMd] = useState<MsgData | null>(null);
   const [target, setTarget] = useState("");
   const [text, setText] = useState("");
+  const [cm, setCm] = useState<Commission[] | null>(null);
+  const [draft, setDraft] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
     const r = await api<Overview>("/api/admin/overview");
     if (r.ok) setD(r.data as Overview); else setErr(r.data.error || "불러오지 못했어요");
+  }, []);
+  const loadCommission = useCallback(async () => {
+    const r = await api<Commission[]>("/api/admin/commission");
+    if (r.ok && Array.isArray(r.data)) {
+      setCm(r.data as Commission[]);
+      setDraft(Object.fromEntries((r.data as Commission[]).map((c) => [c.tier, String(c.pct)])));
+    }
   }, []);
   const loadMsgs = useCallback(async () => {
     const r = await api<MsgData>("/api/admin/messages");
@@ -33,8 +43,8 @@ export default function Admin() {
   }, []);
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (me?.isAdmin) { load(); loadMsgs(); }
-  }, [me?.isAdmin, load, loadMsgs]);
+    if (me?.isAdmin) { load(); loadMsgs(); loadCommission(); }
+  }, [me?.isAdmin, load, loadMsgs, loadCommission]);
 
   if (me === null) return <p className="p-8 text-center text-sm"><Link href="/login" className="text-rose-400 underline">로그인</Link>이 필요해요.</p>;
   if (me && !me.isAdmin) return <p className="p-8 text-center text-sm text-muted">관리자만 볼 수 있어요.</p>;
@@ -117,6 +127,38 @@ export default function Admin() {
               ))}
               {md?.log.length === 0 && <li className="py-2 text-muted">발송 기록이 없어요</li>}
             </ul>
+          </li>
+        )}
+        {tab === "수수료" && (
+          <li className="space-y-3 py-2">
+            <p className="text-xs text-muted">답변 등급(상담 금액)별 플랫폼 수수료율이에요. 질문자가 낸 금액(시작비·메시지·통화)에서 이 비율을 뺀 나머지가 전문가 수익으로 정산돼요. 바꾼 값은 <b>저장 후 새로 시작되는 상담부터</b> 적용돼요.</p>
+            <ul className="divide-y divide-border rounded-lg border border-border">
+              {cm?.map((c) => {
+                const pct = Number(draft[c.tier]);
+                const ok = draft[c.tier] !== "" && Number.isFinite(pct) && pct >= 0 && pct <= 100;
+                return (
+                  <li key={c.tier} className="flex flex-wrap items-center gap-2 p-3">
+                    <span className="min-w-32"><b>{c.label}</b><br /><span className="text-xs text-muted">상담 시작비 {c.fee.toLocaleString()}코인</span></span>
+                    <label className="flex items-center gap-1">
+                      수수료
+                      <input type="number" min={0} max={100} step={0.1} value={draft[c.tier] ?? ""} onChange={(e) => setDraft({ ...draft, [c.tier]: e.target.value })}
+                        className="w-20 rounded border border-border bg-surface-2 px-2 py-1 text-right text-sm text-foreground" />%
+                    </label>
+                    <span className="text-xs text-muted">
+                      {ok ? <>시작비 기준 플랫폼 {Math.round(c.fee * pct / 100).toLocaleString()} · 전문가 {Math.floor(c.fee * (1 - pct / 100)).toLocaleString()}코인</> : <span className="text-rose-400">0~100 사이로 입력</span>}
+                      {c.updatedAt && <><br />최근 변경 {c.updatedAt} · {c.updatedBy}</>}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+            <button className="w-full rounded-lg bg-rose-500 py-2 text-sm text-white hover:bg-rose-400" onClick={async () => {
+              const rates = Object.fromEntries(Object.entries(draft).map(([k, v]) => [k, Number(v)]));
+              if (!confirm(`수수료율을 저장할까요? (${cm?.map((c) => `${c.label} ${rates[c.tier]}%`).join(", ")})\n새로 시작되는 상담부터 적용돼요.`)) return;
+              const r = await api("/api/admin/commission", jsonInit("POST", { rates }));
+              alert(r.ok ? "저장했어요" : r.data.error || "저장에 실패했어요");
+              loadCommission();
+            }}>저장</button>
           </li>
         )}
         {tab === "원장" && d.ledger.map((l) => (

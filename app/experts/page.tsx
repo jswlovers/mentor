@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { api, CATEGORIES } from "@/lib/client";
+import { api, CATEGORIES, won } from "@/lib/client";
 import { TIER_KEYS, TIERS } from "@/lib/server/pricing";
 
 type E = {
@@ -41,7 +41,7 @@ export default function Experts() {
         <div className="grid grid-cols-3 gap-2" aria-label="답변 등급 안내">
           {TIER_KEYS.map((k) => (
             <div key={k} className="rounded-xl border border-border px-2 py-1.5 text-center">
-              <b className="block text-xs">{TIERS[k].label} <span className="font-normal text-rose-300">{(TIERS[k].fee / 10000).toLocaleString()}만</span></b>
+              <b className="block text-xs">{TIERS[k].label} <span className="font-normal text-rose-300">{won(TIERS[k].fee)}</span></b>
               <span className="block text-[11px] text-muted">{TIERS[k].media === "video" ? "글·사진 + 🎬 시연 영상" : TIERS[k].media === "photo" ? "글 + 📷 사진·자료" : "✍️ 글 답변"}</span>
             </div>
           ))}

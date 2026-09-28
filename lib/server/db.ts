@@ -300,6 +300,15 @@ try { db.exec(`ALTER TABLE users ADD COLUMN expert_license_file TEXT`); } catch 
 try { db.exec(`ALTER TABLE consultations RENAME COLUMN difficulty TO tier`); } catch {}
 try { db.exec(`ALTER TABLE consultations ADD COLUMN tier TEXT NOT NULL DEFAULT 'detail'`); } catch {}
 db.exec(`UPDATE consultations SET tier = CASE tier WHEN 'normal' THEN 'detail' WHEN 'hard' THEN 'premium' ELSE tier END WHERE tier IN ('normal', 'hard')`);
+// 관리자가 바꾸는 운영 설정(key → value). 예: commission_pct:basic = 30 (답변 등급별 플랫폼 수수료율 %)
+db.exec(`CREATE TABLE IF NOT EXISTS settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_by TEXT,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+)`);
+// 상담 시작 시점의 수수료율(%)을 고정해 둔다. NULL이면(도입 전 상담) 기본 수수료율로 정산한다.
+try { db.exec(`ALTER TABLE consultations ADD COLUMN commission_pct REAL`); } catch {}
 // 기존 회원(가입 당시 phone이 없던 계정)은 NULL을 허용하고, 값이 있으면 중복을 막는다.
 db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone ON users(phone) WHERE phone IS NOT NULL`);
 

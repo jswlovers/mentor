@@ -4,7 +4,7 @@ import { useParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, jsonInit, useMe, won } from "@/lib/client";
 import {
-  ATTACHMENT_COST, AUTO_REFUND_MINUTES, COST_PER_SEC, DEFAULT_TIER, EXPERT_SHARE, MAX_MESSAGE_CHARS, MAX_VIDEO_BYTES,
+  ATTACHMENT_COST, AUTO_REFUND_MINUTES, COST_PER_SEC, DEFAULT_TIER, MAX_MESSAGE_CHARS, MAX_VIDEO_BYTES,
   MESSAGE_PER_CHAR, messageCost, type Tier, TIER_KEYS, TIERS,
 } from "@/lib/server/pricing";
 
@@ -15,7 +15,7 @@ type Msg = {
 type Status = {
   started: boolean; status: "open" | "ended" | "cancelled" | null; role: "asker" | "expert" | "viewer";
   canJoin: boolean; isQuestionOwner: boolean; category: string; expertName: string | null; expertId: string | null; reviewed: boolean; askerName: string | null; coins: number;
-  tier: Tier | null; fee: number | null; deadline: string | null; preferredName: string | null;
+  tier: Tier | null; fee: number | null; expertShare: number | null; deadline: string | null; preferredName: string | null;
 };
 type Expert = {
   id: string; name: string; headline: string | null; rating: number | null; reviewCount: number; available: boolean;
@@ -289,7 +289,7 @@ export default function Chat() {
         {status.canJoin ? (
           <>
             <p className="text-sm text-muted">
-              {status.askerName}님이 {status.tier && <b className="text-foreground">{TIERS[status.tier].label}</b>} 상담을 신청했어요.{status.tier === "premium" && " 시연 영상을 첨부해 답변해주세요."} 참여하면 질문자가 낸 금액의 {Math.round(EXPERT_SHARE * 100)}%가 수익으로 쌓여요.
+              {status.askerName}님이 {status.tier && <b className="text-foreground">{TIERS[status.tier].label}</b>} 상담을 신청했어요.{status.tier === "premium" && " 시연 영상을 첨부해 답변해주세요."} {status.expertShare !== null && ` 참여하면 질문자가 낸 금액의 ${Math.round(status.expertShare * 1000) / 10}%가 수익으로 쌓여요.`}
               {status.deadline && <> 응답 마감까지 <Countdown until={status.deadline} onDone={loadStatus} /></>}
             </p>
             {err && <p className="text-sm text-rose-400">{err}</p>}

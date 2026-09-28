@@ -1,7 +1,7 @@
 // 코인 과금 정책. 1코인 = 1원. 서버와 프론트가 같은 값을 쓴다.
 // 과금 대상은 상담을 시작한 질문자(asker)뿐이고, 전문가의 답변·통화는 과금하지 않는다.
 //
-// 상담 시작비는 답변 등급별로 다르고(상세 5만원이 기준), 나머지 단가는 포레스트클럽의 값을 기본으로 두었다.
+// 상담 시작비는 답변 등급별로 다르고(기본 5천 · 상세 1만2천 · 프리미엄 2만2천원), 나머지 단가는 포레스트클럽의 값을 기본으로 두었다.
 // 사업 판단에 따라 이 파일에서만 바꾸면 전체에 반영된다.
 export const COIN_PER_KRW = 1;
 export const MIN_CHARGE_KRW = 1000;
@@ -12,9 +12,9 @@ export const MIN_CHARGE_KRW = 1000;
  *    질문자는 등급과 상관없이 사진·파일을 보낼 수 있고, 영상은 영상 등급 상담에서만 양쪽 모두 보낼 수 있다.
  */
 export const TIERS = {
-  basic: { label: "기본 답변", fee: 30_000, media: "text", desc: "채팅으로 원인과 해결 방법을 글로 정리해 드려요" },
-  detail: { label: "상세 답변", fee: 50_000, media: "photo", desc: "글 + 참고 사진·도식·자료 파일로 자세히 설명해 드려요" },
-  premium: { label: "프리미엄 답변", fee: 80_000, media: "video", desc: "글·사진 + 전문가가 직접 찍은 시연 영상으로 보여드려요" },
+  basic: { label: "기본 답변", fee: 5_000, media: "text", desc: "채팅으로 원인과 해결 방법을 글로 정리해 드려요" },
+  detail: { label: "상세 답변", fee: 12_000, media: "photo", desc: "글 + 참고 사진·도식·자료 파일로 자세히 설명해 드려요" },
+  premium: { label: "프리미엄 답변", fee: 22_000, media: "video", desc: "글·사진 + 전문가가 직접 찍은 시연 영상으로 보여드려요" },
 } as const;
 export type Tier = keyof typeof TIERS;
 export const TIER_KEYS = Object.keys(TIERS) as Tier[];
@@ -36,7 +36,7 @@ export const COST_PER_SEC = { voice: 10, video: 100 } as const;
 export const ENTRY_MIN_COINS = 3000; // 이 이하면 통화 시작/참여 불가
 export const CONTINUE_MIN_COINS = 1500; // 통화 중 이 이하로 떨어지면 강제 종료
 
-/** 정산: 질문자가 낸 금액 중 전문가에게 돌아가는 비율 (나머지는 플랫폼 수수료). 사업 판단에 따라 조정. */
+/** 정산 기본값: 질문자가 낸 금액 중 전문가에게 돌아가는 비율. 실제 수수료율은 관리자 페이지에서 등급별로 정한다(lib/server/commission.ts). */
 export const EXPERT_SHARE = 0.7;
 export const MIN_WITHDRAW_COINS = 10_000;
 

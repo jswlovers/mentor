@@ -1,5 +1,6 @@
 import { chargeAsker, getConsultation, isValidRoomId, roleOf } from "@/lib/server/consult";
 import { getBalance, InsufficientCoinsError } from "@/lib/server/coins";
+import { commissionPct, expertShareOf } from "@/lib/server/commission";
 import { db } from "@/lib/server/db";
 import { forbidden, getUser, limited, unauthorized } from "@/lib/server/http";
 import { callExperts } from "@/lib/server/matching";
@@ -11,7 +12,7 @@ const expertStmt = db.prepare(
 );
 const setPreferred = db.prepare(`UPDATE consultations SET preferred_expert_id = ? WHERE room_id = ?`);
 const reviewedStmt = db.prepare(`SELECT 1 AS x FROM reviews WHERE room_id = ?`);
-const insert = db.prepare(`INSERT INTO consultations (room_id, asker_id, asker_name, fee, tier) VALUES (?, ?, ?, ?, ?)`);
+const insert = db.prepare(`INSERT INTO consultations (room_id, asker_id, asker_name, fee, tier, commission_pct) VALUES (?, ?, ?, ?, ?, ?)`);
 const preferredName = db.prepare(`SELECT name FROM users WHERE id = ?`);
 
 // 상태 조회: 상담 시작 여부와 내 역할(질문자 / 전문가 / 구경).
@@ -37,6 +38,7 @@ export async function GET(req: Request) {
     askerName: c?.asker_name ?? null,
     tier: c?.tier ?? null,
     fee: c?.fee ?? null,
+    expertShare: c ? expertShareOf(c.commission_pct) : null,
     // 전문가 대기 중이면 응답 마감 시각(이때까지 참여가 없으면 자동 취소·전액 환불)
     deadline: waiting ? new Date(Date.parse(`${c.started_at.replace(" ", "T")}Z`) + AUTO_REFUND_MINUTES * 60_000).toISOString() : null,
     preferredName: waiting && c.preferred_expert_id ? ((preferredName.get(c.preferred_expert_id) as { name: string } | undefined)?.name ?? null) : null,
@@ -69,7 +71,7 @@ export async function POST(req: Request) {
 
   db.exec("BEGIN");
   try {
-    insert.run(roomId, user.id, user.name, fee, tier);
+    insert.run(roomId, user.id, user.name, fee, tier, commissionPct(tier)); // 지금 수수료율을 이 상담에 고정
     if (preferred) setPreferred.run(preferred, roomId);
     chargeAsker(getConsultation(roomId)!, fee, "consult_start_fee", `상담 시작비(${label})`);
     db.exec("COMMIT");

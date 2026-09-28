@@ -1,6 +1,7 @@
 import { db } from "./db";
 import { debitCoins, refundFromRevenue, settleToExpert } from "./coins";
 import type { User } from "./http";
+import { expertShareOf } from "./commission";
 import type { Tier } from "./pricing";
 
 export type Consultation = {
@@ -16,6 +17,7 @@ export type Consultation = {
   claimed_at: string | null;
   preferred_expert_id: string | null;
   tier: Tier;
+  commission_pct: number | null;
 };
 
 const getStmt = db.prepare(`SELECT * FROM consultations WHERE room_id = ?`);
@@ -41,7 +43,7 @@ export function roleOf(c: Consultation, user: User): Role {
 /** 질문자에게 과금하고, 전문가가 배정돼 있으면 전문가 몫을 정산한다. 트랜잭션 안에서 호출한다. */
 export function chargeAsker(c: Consultation, amount: number, type: string, note: string) {
   debitCoins(c.asker_id, amount, type, `${note} ${roomTag(c.room_id)}`);
-  if (c.expert_id) settleToExpert(c.expert_id, amount, `${note} ${roomTag(c.room_id)}`);
+  if (c.expert_id) settleToExpert(c.expert_id, amount, expertShareOf(c.commission_pct), `${note} ${roomTag(c.room_id)}`);
 }
 
 /**
@@ -53,7 +55,7 @@ export function claimExpert(c: Consultation, expert: User) {
   const res = claimStmt.run(expert.id, expert.name, c.room_id);
   if (Number(res.changes) === 0) return false;
   const spent = (spendStmt.get(`user:${c.asker_id}`, roomTag(c.room_id)) as { total: number }).total;
-  settleToExpert(expert.id, spent, `상담 참여 정산 ${roomTag(c.room_id)}`);
+  settleToExpert(expert.id, spent, expertShareOf(c.commission_pct), `상담 참여 정산 ${roomTag(c.room_id)}`);
   return true;
 }
 

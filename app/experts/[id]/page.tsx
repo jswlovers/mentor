@@ -1,5 +1,6 @@
 "use client";
-import { useParams } from "next/navigation";
+import Link from "next/link";
+import { useParams, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api, timeAgo } from "@/lib/client";
 import Avatar from "../../components/Avatar";
@@ -12,6 +13,7 @@ const stars = (n: number) => "★".repeat(n) + "☆".repeat(5 - n);
 
 export default function ExpertProfile() {
   const { id } = useParams<{ id: string }>();
+  const category = useSearchParams().get("category"); // 전문가 찾기에서 고른 분야
   const [p, setP] = useState<P | null | undefined>(undefined);
 
   useEffect(() => {
@@ -36,6 +38,10 @@ export default function ExpertProfile() {
         {p.categories.length > 0 && <p className="mt-1 flex flex-wrap gap-1">{p.categories.map((c) => <span key={c} className="rounded bg-white/5 px-1.5 py-0.5 text-[11px] text-muted">{c}</span>)}</p>}
       </div>
       </div>
+      <Link href={`/ask?expert=${p.id}${category ? `&category=${encodeURIComponent(category)}` : ""}`}
+        className={`block rounded-lg py-3 text-center font-medium transition ${p.available ? "bg-rose-500 text-white hover:bg-rose-400" : "border border-border text-foreground hover:border-white/30"}`}>
+        {p.available ? `${p.name} 전문가에게 질문하기${category ? ` (${category})` : ""}` : "질문 남기기 (지금은 쉬는 중이에요)"}
+      </Link>
       <p className="whitespace-pre-wrap rounded-lg border border-border bg-surface p-3 text-sm">{p.bio}</p>
       <h2 className="text-sm font-semibold">상담 후기</h2>
       <ul className="space-y-2">

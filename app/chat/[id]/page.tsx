@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, jsonInit, useMe, won } from "@/lib/client";
 import Avatar from "../../components/Avatar";
@@ -103,8 +103,11 @@ export default function Chat() {
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState("");
   const [experts, setExperts] = useState<Expert[]>([]);
+  const [expertsLoaded, setExpertsLoaded] = useState(false);
   const [tierKey, setTierKey] = useState<Tier>(DEFAULT_TIER);
-  const [pick, setPick] = useState("");
+  // 전문가 찾기에서 골라 온 전문가(?expert=)를 미리 선택해 둔다
+  const presetExpert = useSearchParams().get("expert");
+  const [pick, setPick] = useState(presetExpert ?? "");
   const lastId = useRef(0);
   const bottom = useRef<HTMLDivElement>(null);
 
@@ -128,7 +131,7 @@ export default function Chat() {
   useEffect(() => {
     if (!startPending || !category) return;
     const load = () => api<Expert[]>(`/api/experts?available=1&category=${encodeURIComponent(category)}`).then((r) => {
-      if (r.ok && Array.isArray(r.data)) setExperts(r.data as never);
+      if (r.ok && Array.isArray(r.data)) { setExperts(r.data as never); setExpertsLoaded(true); }
     });
     load();
     const t = setInterval(load, 30_000);
@@ -202,6 +205,9 @@ export default function Chat() {
   if (!status.started) {
     const tier = TIERS[tierKey];
     const eligible = experts.filter((x) => x.id !== me?.id);
+    // 골라 온 전문가가 지금 응대 불가(쉬는 중·불가 시간)면 자동 배정으로 신청한다
+    const pickOk = !pick || eligible.some((x) => x.id === pick);
+    const pickGone = expertsLoaded && !pickOk;
     const pill = (on: boolean) => `rounded-xl border p-3 text-left transition ${on ? "border-rose-500 bg-rose-500/10" : "border-border bg-surface hover:border-white/20"}`;
     return (
       <div className="mx-auto max-w-xl space-y-4 px-6 py-8">
@@ -231,7 +237,7 @@ export default function Chat() {
               <h2 className="mb-2 text-sm font-semibold">2. 지금 답변 가능한 전문가 <span className="font-normal text-muted">(선택)</span></h2>
               <ul className="space-y-2">
                 <li>
-                  <button type="button" onClick={() => setPick("")} className={`w-full ${pill(pick === "")}`}>
+                  <button type="button" onClick={() => setPick("")} className={`w-full ${pill(pick === "" || pickGone)}`}>
                     <b className="text-sm">자동 배정</b>
                     <span className="block text-xs text-muted">응대 가능한 전문가 여러 명에게 동시에 알려 가장 먼저 참여한 분과 연결해요</span>
                   </button>
@@ -262,7 +268,8 @@ export default function Chat() {
                   지금 응대 가능한 전문가가 없어요. 자동 배정으로 신청하면 쉬는 중이던 전문가가 돌아올 때까지 기다리고, {AUTO_REFUND_MINUTES}분 안에 아무도 참여하지 않으면 전액 환불돼요.
                 </p>
               )}
-              {pick && <p className="mt-1.5 text-xs text-muted">고른 전문가에게 먼저 알리고, 응답이 없으면 다른 전문가에게도 알려요.</p>}
+              {pickGone && <p className="mt-1.5 rounded-lg border border-amber-500/20 bg-amber-500/10 p-2 text-xs text-amber-300">고른 전문가가 지금은 쉬는 중이라 목록에 없어요. 다른 전문가를 고르거나 자동 배정으로 신청해주세요.</p>}
+              {pick && pickOk && <p className="mt-1.5 text-xs text-muted">고른 전문가에게 먼저 알리고, 응답이 없으면 다른 전문가에게도 알려요.</p>}
             </section>
 
             <div className="rounded-xl border border-border bg-surface p-4 text-sm">
@@ -277,7 +284,7 @@ export default function Chat() {
             </div>
             {status.coins < tier.fee && <Link href="/coins" className="block rounded-lg border border-border py-2 text-center text-sm hover:border-white/30">코인 충전하러 가기</Link>}
             {err && <p className="text-sm text-rose-400">{err}</p>}
-            <button onClick={() => post("/api/consultations", { roomId, tier: tierKey, expertId: pick || undefined })} className="w-full rounded-lg bg-rose-500 py-3 font-medium text-white hover:bg-rose-400">{won(tier.fee)} 결제하고 상담 시작</button>
+            <button onClick={() => post("/api/consultations", { roomId, tier: tierKey, expertId: pickOk && pick ? pick : undefined })} className="w-full rounded-lg bg-rose-500 py-3 font-medium text-white hover:bg-rose-400">{won(tier.fee)} 결제하고 상담 시작</button>
           </>
         ) : (
           <p className="text-sm text-muted">질문 작성자가 상담을 시작하면 승인된 전문가가 참여할 수 있어요.</p>

@@ -57,8 +57,8 @@ export default function Experts() {
       </div>
       <ul className="grid gap-3 px-6 py-4 md:grid-cols-2 md:px-10">
         {list?.map((e) => (
-          <li key={e.id}>
-            <Link href={`/experts/${e.id}`} className="flex gap-3 rounded-2xl border border-border bg-surface p-4 transition hover:border-white/20 hover:bg-surface-2">
+          <li key={e.id} className="overflow-hidden rounded-2xl border border-border bg-surface transition hover:border-white/20">
+            <Link href={`/experts/${e.id}${category ? `?category=${encodeURIComponent(category)}` : ""}`} className="flex gap-3 p-4 transition hover:bg-surface-2">
               <Avatar name={e.name} url={e.photoUrl} size={48} />
               <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-1.5">
@@ -77,6 +77,10 @@ export default function Experts() {
               </p>
               {e.categories.length > 0 && <p className="mt-1 flex flex-wrap gap-1">{e.categories.map((c) => <span key={c} className="rounded bg-white/5 px-1.5 py-0.5 text-[11px] text-muted">{c}</span>)}</p>}
               </div>
+            </Link>
+            <Link href={`/ask?expert=${e.id}${category ? `&category=${encodeURIComponent(category)}` : ""}`}
+              className={`block border-t border-border px-4 py-2 text-center text-sm font-medium transition ${e.available ? "text-rose-400 hover:bg-rose-500/10" : "text-muted hover:bg-surface-2"}`}>
+              {e.available ? `${e.name} 전문가에게 질문하기${category ? ` (${category})` : ""}` : "질문 남기기 (지금은 쉬는 중)"}
             </Link>
           </li>
         ))}

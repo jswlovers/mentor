@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { api, jsonInit, notifyMeChanged, useMe } from "@/lib/client";
+import Avatar from "./Avatar";
 
 export default function Header() {
   const { me, refresh } = useMe();
@@ -56,7 +57,7 @@ export default function Header() {
       </div>
       {me && (
         <nav className="mt-3 flex gap-4 overflow-x-auto text-xs text-muted">
-          <Link href="/account" className="shrink-0 font-semibold text-foreground">{me.name}님</Link>
+          <Link href="/account" className="flex shrink-0 items-center gap-1.5 font-semibold text-foreground"><Avatar name={me.name} url={me.photoUrl} size={18} />{me.name}님</Link>
           <Link href="/color-ai" className="shrink-0 font-semibold text-rose-400 transition hover:text-rose-300">컬러핏 AI</Link>
           <Link href="/experts" className="shrink-0 transition hover:text-foreground">전문가 찾기</Link>
           <Link href="/expert" className="shrink-0 transition hover:text-foreground">{me.isExpert ? "전문가 센터" : "전문가 신청"}</Link>

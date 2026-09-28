@@ -312,6 +312,8 @@ try { db.exec(`ALTER TABLE consultations ADD COLUMN commission_pct REAL`); } cat
 // 전문가 상담 불가 시간(한국 시간 HH:MM). 둘 다 있으면 매일 그 시간대에는 응대 불가로 본다(자정을 넘길 수 있음).
 try { db.exec(`ALTER TABLE users ADD COLUMN expert_off_start TEXT`); } catch {}
 try { db.exec(`ALTER TABLE users ADD COLUMN expert_off_end TEXT`); } catch {}
+// 회원 프로필 사진(공개, data/uploads 안의 파일명). 전문가는 목록·프로필에 표시된다.
+try { db.exec(`ALTER TABLE users ADD COLUMN photo TEXT`); } catch {}
 // 기존 회원(가입 당시 phone이 없던 계정)은 NULL을 허용하고, 값이 있으면 중복을 막는다.
 db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone ON users(phone) WHERE phone IS NOT NULL`);
 

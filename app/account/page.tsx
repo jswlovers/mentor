@@ -1,7 +1,8 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
-import { api, jsonInit, useMe } from "@/lib/client";
+import { api, jsonInit, notifyMeChanged, useMe } from "@/lib/client";
+import Avatar from "../components/Avatar";
 
 const input = "w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-foreground placeholder:text-muted";
 
@@ -15,6 +16,8 @@ export default function Account() {
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [msg, setMsg] = useState("");
+  const [photoMsg, setPhotoMsg] = useState("");
+  const [salon, setSalon] = useState<string | null>(null); // null이면 저장된 값을 보여준다
 
   if (me === null) return <p className="p-8 text-center text-sm"><Link href="/login" className="text-rose-400 underline">로그인</Link>이 필요해요.</p>;
   if (!me) return null;
@@ -42,10 +45,52 @@ export default function Account() {
 
   return (
     <div className="mx-auto max-w-xl space-y-5 px-6 py-8">
-      <section className="rounded-xl border border-border bg-surface p-4 text-sm">
-        <p><b>{me.name}</b> <span className="text-muted">@{me.username}</span></p>
-        <p className="mt-1 text-muted">코인 {me.coins.toLocaleString()} · {me.isExpert ? "검증 전문가" : "일반 회원"}{me.isAdmin ? " · 관리자" : ""}</p>
-        {me.isExpert && <Link href={`/experts/${me.id}`} className="mt-2 inline-block text-rose-400 underline">내 공개 프로필 보기</Link>}
+      <section className="space-y-3 rounded-xl border border-border bg-surface p-4 text-sm">
+        <h2 className="font-semibold">프로필</h2>
+        <div className="flex items-center gap-3">
+          <Avatar name={me.name} url={me.photoUrl} size={72} />
+          <div className="min-w-0">
+            <p><b>{me.name}</b> <span className="text-muted">@{me.username}</span></p>
+            <p className="mt-0.5 text-muted">코인 {me.coins.toLocaleString()} · {me.isExpert ? "검증 전문가" : "일반 회원"}{me.isAdmin ? " · 관리자" : ""}</p>
+            {me.isExpert && me.salon && <p className="mt-0.5 text-muted">🏢 {me.salon}</p>}
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="cursor-pointer rounded-lg border border-border px-3 py-1.5 text-sm text-foreground hover:border-white/30">
+            {me.photoUrl ? "사진 바꾸기" : "사진 올리기"}
+            <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={async (e) => {
+              const file = e.target.files?.[0];
+              e.target.value = "";
+              if (!file) return;
+              const f = new FormData();
+              f.set("photo", file);
+              const r = await api("/api/account/photo", { method: "POST", body: f });
+              setPhotoMsg(r.ok ? "프로필 사진을 바꿨어요." : r.data.error || "올리지 못했어요");
+              notifyMeChanged();
+            }} />
+          </label>
+          {me.photoUrl && (
+            <button onClick={async () => {
+              if (!confirm("프로필 사진을 삭제할까요?")) return;
+              const r = await api("/api/account/photo", { method: "DELETE" });
+              setPhotoMsg(r.ok ? "프로필 사진을 삭제했어요." : r.data.error || "삭제하지 못했어요");
+              notifyMeChanged();
+            }} className="text-xs text-muted underline hover:text-foreground">사진 삭제</button>
+          )}
+          <span className="text-[11px] text-muted">JPG·PNG·WEBP, 5MB 이하{me.isExpert ? " · 전문가 목록과 공개 프로필에 보여요" : ""}</span>
+        </div>
+        {me.isExpert && (
+          <div className="flex gap-2">
+            <input className={input} maxLength={60} placeholder="직장명 (예: OO헤어 강남점)" value={salon ?? me.salon ?? ""} onChange={(e) => setSalon(e.target.value)} />
+            <button onClick={async () => {
+              const r = await api("/api/account/profile", jsonInit("POST", { salon: salon ?? me.salon ?? "" }));
+              setPhotoMsg(r.ok ? "직장명을 저장했어요." : r.data.error || "저장하지 못했어요");
+              if (r.ok) { setSalon(null); notifyMeChanged(); }
+            }} className="shrink-0 rounded-lg border border-border px-3 text-sm text-foreground hover:border-white/30">저장</button>
+          </div>
+        )}
+        {photoMsg && <p className="text-xs text-muted">{photoMsg}</p>}
+        {me.isExpert && <Link href={`/experts/${me.id}`} className="inline-block text-rose-400 underline">내 공개 프로필 보기</Link>}
       </section>
       <section className="space-y-2 rounded-xl border border-border bg-surface p-4 text-sm">
         <h2 className="font-semibold">카카오톡 알림</h2>

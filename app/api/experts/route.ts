@@ -1,14 +1,15 @@
 import { isAvailableNow } from "@/lib/server/availability";
 import { db } from "@/lib/server/db";
+import { photoUrl } from "@/lib/server/photo";
 import { RESPONSE_STAT_MIN_SAMPLES } from "@/lib/server/pricing";
 
 type Row = {
-  id: string; name: string; expert_headline: string | null; expert_bio: string | null; expert_available: number; expert_off_start: string | null; expert_off_end: string | null; created_at: string;
+  id: string; name: string; expert_headline: string | null; expert_bio: string | null; expert_available: number; expert_off_start: string | null; expert_off_end: string | null; expert_salon: string | null; photo: string | null; created_at: string;
   rating: number | null; review_count: number; done: number; resp_n: number; resp_avg: number | null;
 };
 
 const listStmt = db.prepare(`
-  SELECT u.id, u.name, u.expert_headline, u.expert_bio, u.expert_available, u.expert_off_start, u.expert_off_end, u.created_at,
+  SELECT u.id, u.name, u.expert_headline, u.expert_bio, u.expert_available, u.expert_off_start, u.expert_off_end, u.expert_salon, u.photo, u.created_at,
     (SELECT AVG(rating) FROM reviews r WHERE r.expert_id = u.id) AS rating,
     (SELECT COUNT(*) FROM reviews r WHERE r.expert_id = u.id) AS review_count,
     (SELECT COUNT(*) FROM consultations c WHERE c.expert_id = u.id AND c.status = 'ended') AS done,
@@ -36,6 +37,8 @@ export async function GET(req: Request) {
     id: r.id,
     name: r.name,
     headline: r.expert_headline,
+    salon: r.expert_salon,
+    photoUrl: photoUrl(r.id, r.photo),
     bio: (r.expert_bio ?? "").slice(0, 120),
     categories: cats.get(r.id) ?? [],
     available: isAvailableNow(r), // ON이고 상담 불가 시간이 아닐 때
@@ -50,7 +53,7 @@ export async function GET(req: Request) {
 
   // 분야를 정하지 않은 전문가는 모든 분야를 받는 것으로 본다
   if (category) list = list.filter((e) => e.categories.length === 0 || e.categories.includes(category));
-  if (q) list = list.filter((e) => `${e.name} ${e.headline ?? ""} ${e.bio}`.toLowerCase().includes(q));
+  if (q) list = list.filter((e) => `${e.name} ${e.headline ?? ""} ${e.salon ?? ""} ${e.bio}`.toLowerCase().includes(q));
   if (onlyAvailable) list = list.filter((e) => e.available);
 
   list.sort((a, b) => {

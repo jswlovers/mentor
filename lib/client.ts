@@ -19,6 +19,9 @@ export type Me = {
   position: string | null;
   /** 전문가만: on = 직접 켠 상태, offNow = 상담 불가 시간이라 쉬는 중 */
   availability: Availability | null;
+  photoUrl: string | null;
+  /** 전문가 직장명(근무 살롱) */
+  salon: string | null;
 };
 
 // 세션 쿠키(HttpOnly)로 인증하므로 fetch가 쿠키를 자동으로 보낸다.

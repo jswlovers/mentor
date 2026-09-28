@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, jsonInit, useMe, won } from "@/lib/client";
+import Avatar from "../../components/Avatar";
 import {
   ATTACHMENT_COST, AUTO_REFUND_MINUTES, COST_PER_SEC, DEFAULT_TIER, MAX_MESSAGE_CHARS, MAX_VIDEO_BYTES,
   MESSAGE_PER_CHAR, messageCost, type Tier, TIER_KEYS, TIERS,
@@ -18,7 +19,7 @@ type Status = {
   tier: Tier | null; fee: number | null; expertShare: number | null; deadline: string | null; preferredName: string | null;
 };
 type Expert = {
-  id: string; name: string; headline: string | null; rating: number | null; reviewCount: number; available: boolean;
+  id: string; name: string; headline: string | null; salon: string | null; photoUrl: string | null; rating: number | null; reviewCount: number; available: boolean;
   consultations: number; avgResponseMinutes: number | null;
 };
 
@@ -237,16 +238,20 @@ export default function Chat() {
                 </li>
                 {eligible.map((x) => (
                   <li key={x.id}>
-                    <button type="button" onClick={() => setPick(x.id)} className={`w-full ${pill(pick === x.id)}`}>
+                    <button type="button" onClick={() => setPick(x.id)} className={`flex w-full gap-3 ${pill(pick === x.id)}`}>
+                      <Avatar name={x.name} url={x.photoUrl} size={40} />
+                      <span className="min-w-0 flex-1">
                       <span className="flex items-center gap-1.5 text-sm">
                         <b>{x.name}</b>
                         <span className="text-[11px] text-emerald-400">● 응대 가능</span>
                       </span>
+                      {x.salon && <span className="block text-xs text-foreground/80">🏢 {x.salon}</span>}
                       {x.headline && <span className="block text-xs">{x.headline}</span>}
                       <span className="block text-xs text-muted">
                         {x.rating !== null ? <><span className="text-amber-400">★</span> {x.rating.toFixed(1)} ({x.reviewCount})</> : "후기 없음"}
                         {` · 상담 ${x.consultations}건`}
                         {x.avgResponseMinutes !== null && ` · 평균 응답 ${x.avgResponseMinutes}분`}
+                      </span>
                       </span>
                     </button>
                   </li>

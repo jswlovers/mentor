@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { api, jsonInit, useMe } from "@/lib/client";
+import ChargeCalendar from "./ChargeCalendar";
 
 type Overview = {
   charges: { id: number; amount_krw: number; status: string; created_at: string; user_name: string; depositor: string | null }[];
@@ -63,6 +64,7 @@ export default function Admin() {
       <div className="mb-3 flex gap-2 overflow-x-auto">
         {TABS.map((t) => <button key={t} onClick={() => setTab(t)} className={`shrink-0 rounded-full border px-3 py-1 text-sm transition ${tab === t ? "border-rose-500 bg-rose-500 text-white" : "border-border text-muted hover:text-foreground"}`}>{t}</button>)}
       </div>
+      {tab === "충전" && <ChargeCalendar refreshKey={d} />}
       <ul className="divide-y divide-border text-sm">
         {tab === "충전" && d.charges.map((c) => (
           <li key={c.id} className="flex items-center justify-between gap-2 py-2">

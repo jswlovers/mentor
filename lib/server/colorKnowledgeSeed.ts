@@ -1,6 +1,7 @@
 // 컬러핏 Q&A 지식 베이스 원본 데이터.
 // 유튜브 영상의 화면(책 페이지)과 자막을 보고 정리했다. 서버 시작 시 color_knowledge 테이블에 upsert 된다.
 // 새 자료를 학습시키려면 KNOWLEDGE_SOURCES 에 출처를, KNOWLEDGE_ENTRIES 에 항목을 추가하면 된다.
+import { PRO_RECIPE_COMMON, PRO_RECIPES } from "../proRecipes";
 
 export type KnowledgeSource = {
   id: string;
@@ -30,6 +31,13 @@ export const KNOWLEDGE_SOURCES: KnowledgeSource[] = [
     author: "지조사마 FIT'S CUT · 더배움뷰티 / 책 저자 카와구치 노부히로(DADA CuBiC)",
     url: "https://www.youtube.com/watch?v=C2UzZDQR3YM",
     note: "2022-03-13 업로드, 9분. 책 페이지 화면과 자막을 바탕으로 정리",
+  },
+  {
+    id: "pro-recipes-dm",
+    title: "현장 원장 컬러 레시피 (브랜드별)",
+    author: "현장 원장님 DM 공유",
+    url: "",
+    note: "2026-09-30 DM 캡처 2장. 원문 레시피는 lib/proRecipes.ts",
   },
 ];
 
@@ -451,3 +459,24 @@ export const KNOWLEDGE_ENTRIES: KnowledgeEntry[] = [
     ts: 475,
   },
 ];
+
+// 현장 원장 레시피: lib/proRecipes.ts 데이터를 그대로 Q&A 항목으로 만든다.
+const PRO = "pro-recipes-dm";
+KNOWLEDGE_ENTRIES.push(
+  ...PRO_RECIPES.map((r) => ({
+    id: r.id,
+    sourceId: PRO,
+    title: `레시피: ${r.brandLabel} — ${r.mood.split(" (")[0]}`,
+    keywords: [...r.keywords, "레시피", "배합", ...r.targets.map((t) => t.replace(/s/g, ""))],
+    summary: `${r.formula} → ${r.mood}`,
+    points: [`배합: ${r.formula}`, ...r.tips, `어울리는 목표 컬러: ${r.targets.join(", ")}`, ...PRO_RECIPE_COMMON],
+  })),
+  {
+    id: "pro-recipes-common",
+    sourceId: PRO,
+    title: "현장 레시피 공통 조건: 염색모 기준, 버진모는 리프트업 후",
+    keywords: ["버진", "버진모", "리프트업", "염색모", "모질", "레시피조건"],
+    summary: "공유받은 레시피는 모두 염색모 기준이에요. 버진모라면 리프트업 후 진행해야 해요.",
+    points: [...PRO_RECIPE_COMMON, `레시피 목록: ${PRO_RECIPES.map((r) => `${r.brandLabel}(${r.formula})`).join(" / ")}`],
+  },
+);

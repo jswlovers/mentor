@@ -3,6 +3,7 @@
 // 염모제는 브랜드별 카탈로그(lib/dyeCatalog.ts)의 넘버 id로 받는다.
 import { db } from "./db";
 import { harmonyNotes } from "../colorHarmony";
+import { proRecipeNotes } from "../proRecipes";
 import { HUE_LABEL, complement, underlyingPigment } from "../colorWheel";
 import {
   BLEACH_LEVEL,
@@ -306,6 +307,7 @@ export function computeRecommendation(input: RecommendInput): Formula {
   }
 
   notes.push(...harmonyNotes(target.name));
+  notes.push(...proRecipeNotes(target.name, brand?.id));
 
   notes.push("AI 추천은 보조 정보이며 실제 모발 상태에 따른 디자이너의 최종 판단이 필요합니다.");
 

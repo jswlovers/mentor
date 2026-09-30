@@ -96,7 +96,9 @@ export default function ColorQna() {
         <div className="mt-4 space-y-3">
           {sources.map((s) => (
             <div key={s.id} className="rounded-xl border border-border bg-surface-2 p-3">
-              <a href={s.url} target="_blank" rel="noreferrer" className="text-xs font-bold text-rose-300 underline">{s.title}</a>
+              {s.url
+                ? <a href={s.url} target="_blank" rel="noreferrer" className="text-xs font-bold text-rose-300 underline">{s.title}</a>
+                : <span className="text-xs font-bold text-rose-300">{s.title}</span>}
               <p className="mt-0.5 text-[11px] text-muted">{s.author}</p>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {s.topics.map((t) => (
@@ -138,7 +140,9 @@ export default function ColorQna() {
                 {result.answer.points.map((p, i) => <li key={i}>{p}</li>)}
               </ul>
               <p className="mt-4 border-t border-border pt-3 text-[11px] text-muted">
-                출처: <a href={result.answer.source.url} target="_blank" rel="noreferrer" className="text-rose-300 underline">{result.answer.source.title}</a>
+                출처: {result.answer.source.url
+                  ? <a href={result.answer.source.url} target="_blank" rel="noreferrer" className="text-rose-300 underline">{result.answer.source.title}</a>
+                  : result.answer.source.title}
                 {result.answer.page ? ` · ${result.answer.page}` : ""}
               </p>
             </>

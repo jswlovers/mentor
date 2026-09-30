@@ -1,3 +1,4 @@
+import { getAdminPending } from "@/lib/server/adminAlerts";
 import { getAvailability } from "@/lib/server/availability";
 import { getBalance, getEarnings } from "@/lib/server/coins";
 import { db } from "@/lib/server/db";
@@ -25,6 +26,8 @@ export async function GET(req: Request) {
       salon: ph.expert_salon,
       // 전문가 상담 ON/OFF 상태(헤더 토글용)
       availability: user.isExpert ? getAvailability(user.id) : null,
+      // 관리자만: 처리 대기 건수(헤더 배지용)
+      adminPending: user.isAdmin ? getAdminPending() : null,
     },
   });
 }

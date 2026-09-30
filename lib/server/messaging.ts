@@ -33,6 +33,8 @@ export const TEMPLATES = {
   expert_rejected: { env: "KAKAO_TEMPLATE_EXPERT_REJECTED", text: () => "전문가 신청이 반려됐어요. 내용을 보완해 다시 신청해주세요." },
   withdraw_paid: { env: "KAKAO_TEMPLATE_WITHDRAW_PAID", text: (v) => `${v.amount}원 출금이 지급됐어요.` },
   ticket_resolved: { env: "KAKAO_TEMPLATE_TICKET_RESOLVED", text: () => "문의가 처리됐어요. 앱에서 답변을 확인해주세요." },
+  // 관리자에게: 새 충전·전문가·출금·문의 요청 도착 (lib/server/adminAlerts.ts)
+  admin_alert: { env: "KAKAO_TEMPLATE_ADMIN_ALERT", text: (v) => `새 ${v.what} 요청이 들어왔어요. (${v.detail}) 관리자 페이지에서 확인해주세요.`, throttleMinutes: 5 },
   // 관리자 안내(서비스 공지·결제 안내). 자유 문구라 템플릿은 #{message} 변수 하나로 등록한다.
   admin_notice: { env: "KAKAO_TEMPLATE_ADMIN_NOTICE", text: (v) => v.message },
 } satisfies Record<string, Template>;

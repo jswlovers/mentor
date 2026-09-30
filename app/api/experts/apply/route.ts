@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { notifyAdmins } from "@/lib/server/adminAlerts";
 import { db } from "@/lib/server/db";
 import { LICENSE_DIR, LICENSE_EXT, LICENSE_MAX_BYTES } from "@/lib/server/expertLicense";
 import { getUser, unauthorized } from "@/lib/server/http";
@@ -40,5 +41,6 @@ export async function POST(req: Request) {
   if (prev) fs.rmSync(path.join(LICENSE_DIR, path.basename(prev)), { force: true });
 
   apply.run(bio, years, salon, licenseNo || null, name, user.id);
+  notifyAdmins("전문가", `${user.name} · ${salon} · 경력 ${years}년`);
   return Response.json({ ok: true }, { status: 201 });
 }

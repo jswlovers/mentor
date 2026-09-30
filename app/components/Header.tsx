@@ -18,13 +18,14 @@ export default function Header() {
     if (!r.ok) alert(r.data.error || "변경하지 못했어요");
     notifyMeChanged();
   };
-  // 불가 시간이 시작·끝나면 표시가 바뀌도록 전문가는 1분마다 다시 불러온다
-  const isExpert = !!av;
+  // 불가 시간이 시작·끝나면 표시가 바뀌도록 전문가는, 새 요청 건수가 보이도록 관리자는 1분마다 다시 불러온다
+  const poll = !!av || !!me?.isAdmin;
   useEffect(() => {
-    if (!isExpert) return;
+    if (!poll) return;
     const t = setInterval(refresh, 60_000);
     return () => clearInterval(t);
-  }, [isExpert, refresh]);
+  }, [poll, refresh]);
+  const pending = me?.adminPending?.total ?? 0;
 
   const logout = async () => {
     await api("/api/auth/logout", { method: "POST" });
@@ -64,7 +65,11 @@ export default function Header() {
           <Link href="/experts" className="shrink-0 transition hover:text-foreground">전문가 찾기</Link>
           <Link href="/expert" className="shrink-0 transition hover:text-foreground">{me.isExpert ? "전문가 센터" : "전문가 신청"}</Link>
           <Link href="/support" className="shrink-0 transition hover:text-foreground">고객센터</Link>
-          {me.isAdmin && <Link href="/admin" className="shrink-0 transition hover:text-foreground">관리자</Link>}
+          {me.isAdmin && (
+            <Link href="/admin" className="flex shrink-0 items-center gap-1 transition hover:text-foreground" title={pending ? `처리 대기 ${pending}건` : undefined}>
+              관리자{pending > 0 && <span className="min-w-[18px] rounded-full bg-rose-500 px-1 text-center text-[11px] leading-[18px] text-white">{pending > 99 ? "99+" : pending}</span>}
+            </Link>
+          )}
           <button onClick={logout} className="shrink-0 transition hover:text-foreground">로그아웃</button>
         </nav>
       )}

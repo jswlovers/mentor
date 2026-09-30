@@ -1,7 +1,8 @@
 "use client";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
-import { api, jsonInit, useMe } from "@/lib/client";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useState } from "react";
+import { api, jsonInit, notifyMeChanged, useMe, type AdminPending } from "@/lib/client";
 import ChargeCalendar from "./ChargeCalendar";
 
 type Overview = {
@@ -11,15 +12,31 @@ type Overview = {
   tickets: { id: number; category: string; subject: string; body: string; status: string; user_name: string; target_name: string | null; created_at: string }[];
   users: { id: string; username: string; name: string; role: string; expert_status: string; suspended_at: string | null }[];
   ledger: { id: number; account: string; direction: string; amount: number; type: string; note: string | null; created_at: string }[];
+  pending: AdminPending;
 };
 const TABS = ["충전", "전문가", "출금", "문의", "회원", "수수료", "원장", "메시지"] as const;
+type Tab = (typeof TABS)[number];
+const isTab = (t: string | null): t is Tab => TABS.includes(t as Tab);
+// 탭별 처리 대기 건수 (배지)
+const PENDING_KEY: Partial<Record<Tab, keyof AdminPending>> = { 충전: "charges", 전문가: "experts", 출금: "withdrawals", 문의: "tickets" };
 type Commission = { tier: string; label: string; fee: number; pct: number; updatedBy: string | null; updatedAt: string | null };
 type MsgData = { stats: { total: number; verified: number; consented: number }; log: { id: number; channel: string; kind: string; text: string; status: string; created_at: string; user_name: string | null; username: string | null }[] };
 
-export default function Admin() {
+export default function AdminPage() {
+  return <Suspense><Admin /></Suspense>;
+}
+
+function Admin() {
   const { me } = useMe();
   const [d, setD] = useState<Overview | null>(null);
-  const [tab, setTab] = useState<(typeof TABS)[number]>("충전");
+  // 관리자 알림 링크(/admin?tab=전문가 등)로 들어오면 해당 탭을 연다
+  const tabParam = useSearchParams().get("tab");
+  const [tab, setTab] = useState<Tab>(isTab(tabParam) ? tabParam : "충전");
+  const [seenParam, setSeenParam] = useState(tabParam);
+  if (tabParam !== seenParam) {
+    setSeenParam(tabParam);
+    if (isTab(tabParam)) setTab(tabParam);
+  }
   const [err, setErr] = useState("");
   const [md, setMd] = useState<MsgData | null>(null);
   const [target, setTarget] = useState("");
@@ -55,6 +72,7 @@ export default function Admin() {
     const r = await api(path, jsonInit("POST", body));
     if (!r.ok) alert(r.data.error || "처리에 실패했어요");
     load();
+    notifyMeChanged(); // 헤더의 대기 건수 배지도 갱신
   };
   const ask = (msg: string) => prompt(msg) ?? undefined;
   const btn = "rounded border border-border px-2 py-0.5 text-xs text-foreground hover:border-white/30";
@@ -62,7 +80,14 @@ export default function Admin() {
   return (
     <div className="px-6 py-6 md:px-10">
       <div className="mb-3 flex gap-2 overflow-x-auto">
-        {TABS.map((t) => <button key={t} onClick={() => setTab(t)} className={`shrink-0 rounded-full border px-3 py-1 text-sm transition ${tab === t ? "border-rose-500 bg-rose-500 text-white" : "border-border text-muted hover:text-foreground"}`}>{t}</button>)}
+        {TABS.map((t) => {
+          const n = PENDING_KEY[t] ? d.pending[PENDING_KEY[t]] : 0;
+          return (
+            <button key={t} onClick={() => setTab(t)} className={`flex shrink-0 items-center gap-1 rounded-full border px-3 py-1 text-sm transition ${tab === t ? "border-rose-500 bg-rose-500 text-white" : "border-border text-muted hover:text-foreground"}`}>
+              {t}{n > 0 && <span className={`min-w-[18px] rounded-full px-1 text-center text-[11px] leading-[18px] ${tab === t ? "bg-white text-rose-500" : "bg-rose-500 text-white"}`}>{n}</span>}
+            </button>
+          );
+        })}
       </div>
       {tab === "충전" && <ChargeCalendar refreshKey={d} />}
       <ul className="divide-y divide-border text-sm">

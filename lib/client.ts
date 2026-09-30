@@ -22,7 +22,10 @@ export type Me = {
   photoUrl: string | null;
   /** 전문가 직장명(근무 살롱) */
   salon: string | null;
+  /** 관리자만: 처리 대기 건수 */
+  adminPending: AdminPending | null;
 };
+export type AdminPending = { charges: number; experts: number; withdrawals: number; tickets: number; total: number };
 
 // 세션 쿠키(HttpOnly)로 인증하므로 fetch가 쿠키를 자동으로 보낸다.
 export async function api<T = unknown>(url: string, init: RequestInit = {}): Promise<{ ok: boolean; status: number; data: T & { error?: string } }> {

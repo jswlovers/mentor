@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, CATEGORIES, jsonInit, useMe } from "@/lib/client";
 import ConsultAvailability from "./ConsultAvailability";
 
@@ -26,6 +26,9 @@ export default function Expert() {
   const [cats, setCats] = useState<string[]>([]);
   const [headline, setHeadline] = useState("");
   const [smsg, setSmsg] = useState("");
+  // 첨부한 면허증 사진 미리보기
+  const licensePreview = useMemo(() => (license ? URL.createObjectURL(license) : null), [license]);
+  useEffect(() => () => { if (licensePreview) URL.revokeObjectURL(licensePreview); }, [licensePreview]);
 
   const load = useCallback(async () => {
     const r = await api<Earn>("/api/experts/earnings");
@@ -86,9 +89,22 @@ export default function Expert() {
             <label className="block text-xs font-semibold text-muted">미용사 면허번호 (선택)
               <input maxLength={30} className={`${input} mt-1`} placeholder="면허증에 적힌 번호" value={licenseNo} onChange={(e) => setLicenseNo(e.target.value)} />
             </label>
-            <label className="block text-xs font-semibold text-muted">면허증·자격증 사진 (필수, JPG·PNG·WEBP 5MB 이하)
-              <input required type="file" accept="image/jpeg,image/png,image/webp" className="mt-1 block w-full text-sm text-foreground" onChange={(e) => setLicense(e.target.files?.[0] ?? null)} />
-            </label>
+            <div className="text-xs font-semibold text-muted">면허증·자격증 사진 (필수, JPG·PNG·WEBP 5MB 이하)
+              {/* 기본 파일 선택 버튼은 어두운 화면에서 잘 안 보여서, 입력은 숨기고 눌러서 고르는 업로드 칸을 보여준다 */}
+              <label className={`mt-1 flex cursor-pointer items-center gap-3 rounded-lg border-2 border-dashed p-3 transition hover:border-rose-400 ${license ? "border-emerald-500/50 bg-emerald-500/5" : "border-border bg-surface-2"}`}>
+                <input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only"
+                  onChange={(e) => { const f = e.target.files?.[0] ?? null; if (f && f.size > 5 * 1024 * 1024) { setMsg("면허증 사진은 5MB 이하만 올릴 수 있어요"); e.target.value = ""; return; } setLicense(f); setMsg(""); }} />
+                {licensePreview
+                  // eslint-disable-next-line @next/next/no-img-element
+                  ? <img src={licensePreview} alt="면허증 미리보기" className="h-16 w-16 shrink-0 rounded object-cover" />
+                  : <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded bg-white/5 text-2xl">📷</span>}
+                <span className="min-w-0 flex-1 font-normal">
+                  <span className="block font-semibold text-foreground">{license ? "사진이 첨부됐어요" : "여기를 눌러 면허증·자격증 사진 첨부"}</span>
+                  <span className="block truncate text-muted">{license ? `${license.name} · 눌러서 다른 사진으로 바꾸기` : "휴대폰은 촬영하거나 앨범에서 고를 수 있어요"}</span>
+                </span>
+                <span className="shrink-0 rounded-lg bg-rose-500 px-3 py-1.5 text-xs font-medium text-white">{license ? "변경" : "파일 선택"}</span>
+              </label>
+            </div>
             <textarea required rows={6} maxLength={1000} className={input} placeholder="경력, 자격(미용사 면허 등), 전문 분야를 20자 이상 적어주세요" value={bio} onChange={(e) => setBio(e.target.value)} />
             <button className="w-full rounded-lg bg-rose-500 py-3 font-medium text-white hover:bg-rose-400">전문가 신청</button>
           </form>

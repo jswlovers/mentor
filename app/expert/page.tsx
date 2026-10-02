@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, CATEGORIES, jsonInit, useMe } from "@/lib/client";
 import ConsultAvailability from "./ConsultAvailability";
+import Portfolio from "./Portfolio";
 
 type Earn = {
   earnings: number; shares: { label: string; pct: number }[]; minWithdraw: number;
@@ -25,6 +26,7 @@ export default function Expert() {
   const [msg, setMsg] = useState("");
   const [cats, setCats] = useState<string[]>([]);
   const [headline, setHeadline] = useState("");
+  const [myYears, setMyYears] = useState("");
   const [smsg, setSmsg] = useState("");
   // 첨부한 면허증 사진 미리보기
   const licensePreview = useMemo(() => (license ? URL.createObjectURL(license) : null), [license]);
@@ -39,8 +41,8 @@ export default function Expert() {
     if (me?.isExpert) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       load();
-      api<{ categories: string[]; headline: string }>("/api/experts/settings").then((r) => {
-        if (r.ok) { setCats(r.data.categories); setHeadline(r.data.headline); }
+      api<{ categories: string[]; headline: string; years: number | null }>("/api/experts/settings").then((r) => {
+        if (r.ok) { setCats(r.data.categories); setHeadline(r.data.headline); setMyYears(r.data.years == null ? "" : String(r.data.years)); }
       });
     }
   }, [me?.isExpert, load]);
@@ -123,7 +125,7 @@ export default function Expert() {
   };
 
   const saveSettings = async () => {
-    const r = await api("/api/experts/settings", jsonInit("POST", { categories: cats, headline }));
+    const r = await api("/api/experts/settings", jsonInit("POST", { categories: cats, headline, years: myYears }));
     setSmsg(r.ok ? "저장했어요." : r.data.error || "저장에 실패했어요");
   };
 
@@ -139,9 +141,13 @@ export default function Expert() {
           ))}
         </div>
         <input className={input} maxLength={40} placeholder="한 줄 소개 (예: 탈색·염색 손상모 케어 15년)" value={headline} onChange={(e) => setHeadline(e.target.value)} />
+        <label className="flex items-center gap-2 text-xs text-muted">경력
+          <input type="number" min={0} max={60} inputMode="numeric" className={`${input} w-20`} value={myYears} onChange={(e) => setMyYears(e.target.value)} />년 (전문가 찾기·프로필에 표시돼요)
+        </label>
         <button onClick={saveSettings} className="w-full rounded-lg border border-border bg-surface-2 py-2 text-sm font-medium text-foreground hover:border-white/30">저장</button>
         {smsg && <p className="text-xs text-muted">{smsg}</p>}
       </section>
+      <Portfolio />
       <section className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-4">
         <p className="text-xs text-emerald-300">출금 가능 수익 (코인 = 원)</p>
         <p className="text-3xl font-bold">{data ? data.earnings.toLocaleString() : "…"}</p>

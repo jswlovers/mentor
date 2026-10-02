@@ -20,7 +20,7 @@ type Status = {
 };
 type Expert = {
   id: string; name: string; headline: string | null; salon: string | null; photoUrl: string | null; rating: number | null; reviewCount: number; available: boolean;
-  consultations: number; avgResponseMinutes: number | null;
+  consultations: number; medianResponseMinutes: number | null;
 };
 
 /** 등급별로 답변에 담기는 것 */
@@ -272,7 +272,7 @@ export default function Chat() {
                       <span className="block text-xs text-muted">
                         {x.rating !== null ? <><span className="text-amber-400">★</span> {x.rating.toFixed(1)} ({x.reviewCount})</> : "후기 없음"}
                         {` · 상담 ${x.consultations}건`}
-                        {x.avgResponseMinutes !== null && ` · 평균 응답 ${x.avgResponseMinutes}분`}
+                        {x.medianResponseMinutes !== null && ` · 보통 ${x.medianResponseMinutes}분 안에 응답`}
                       </span>
                       </span>
                     </button>

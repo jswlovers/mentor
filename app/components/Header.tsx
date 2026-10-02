@@ -63,10 +63,10 @@ export default function Header() {
           <Link href="/account" className="flex shrink-0 items-center gap-1.5 font-semibold text-foreground"><Avatar name={me.name} url={me.photoUrl} size={18} />{me.name}님</Link>
           <Link href="/ask" className="shrink-0 font-semibold text-foreground transition hover:text-rose-300">질문하기</Link>
           <Link href="/color-ai" className="shrink-0 font-semibold text-rose-400 transition hover:text-rose-300">컬러핏 AI</Link>
-          <Link href="/salon" className="shrink-0 font-semibold text-foreground transition hover:text-rose-300">내 매장</Link>
           <Link href="/experts" className="shrink-0 transition hover:text-foreground">전문가 찾기</Link>
           <Link href="/expert" className="shrink-0 transition hover:text-foreground">{me.isExpert ? "전문가 센터" : "전문가 신청"}</Link>
           <Link href="/support" className="shrink-0 transition hover:text-foreground">고객센터</Link>
+          <Link href="/salon" className="shrink-0 font-semibold text-foreground transition hover:text-rose-300">내 매장</Link>
           {me.isAdmin && (
             <Link href="/admin" className="flex shrink-0 items-center gap-1 transition hover:text-foreground" title={pending ? `처리 대기 ${pending}건` : undefined}>
               관리자{pending > 0 && <span className="min-w-[18px] rounded-full bg-rose-500 px-1 text-center text-[11px] leading-[18px] text-white">{pending > 99 ? "99+" : pending}</span>}

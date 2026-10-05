@@ -1,8 +1,11 @@
 "use client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api, CATEGORIES, timeAgo, useMe } from "@/lib/client";
+import AvailableNow from "./components/AvailableNow";
+
+const PAGE = 20;
 
 type Row = { id: string; asker_name: string; category: string; title: string; status: string; created_at: string; answer_count: number; consult_status: string | null };
 
@@ -17,12 +20,48 @@ export default function Home() {
   const { me } = useMe();
   const [items, setItems] = useState<Row[] | null>(null);
   const [cat, setCat] = useState<string>("전체");
+  const [input, setInput] = useState("");
+  const [term, setTerm] = useState("");
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  // 검색어는 입력이 멈추고 0.3초 뒤에 반영한다
+  useEffect(() => {
+    const t = setTimeout(() => setTerm(input.trim()), 300);
+    return () => clearTimeout(t);
+  }, [input]);
+
+  const fetchPage = useCallback(
+    (offset: number) => {
+      const sp = new URLSearchParams({ limit: String(PAGE), offset: String(offset) });
+      if (cat !== "전체") sp.set("category", cat);
+      if (term) sp.set("q", term);
+      return api<Row[]>(`/api/questions?${sp}`).then((r) => (r.ok ? (r.data as unknown as Row[]) : []));
+    },
+    [cat, term],
+  );
 
   useEffect(() => {
-    api<Row[]>("/api/questions").then((r) => setItems(r.ok ? (r.data as unknown as Row[]) : []));
-  }, []);
+    let alive = true;
+    fetchPage(0).then((rows) => {
+      if (!alive) return;
+      setItems(rows);
+      setHasMore(rows.length === PAGE);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [fetchPage]);
 
-  const list = (items ?? []).filter((q) => cat === "전체" || q.category === cat);
+  const loadMore = async () => {
+    setLoadingMore(true);
+    const rows = await fetchPage(items?.length ?? 0);
+    setItems((prev) => [...(prev ?? []), ...rows.filter((r) => !prev?.some((p) => p.id === r.id))]);
+    setHasMore(rows.length === PAGE);
+    setLoadingMore(false);
+  };
+
+  const list = items ?? [];
 
   return (
     <div className="pb-16">
@@ -32,6 +71,7 @@ export default function Home() {
           {me ? `${me.name}님, 오늘도 좋은 헤어 되세요` : "지금, 전문가에게 물어보세요"}
         </h1>
         <p className="mt-2 text-sm text-muted md:text-base">질문·1:1 상담·컬러 진단까지 한 곳에서 해결해요.</p>
+        <AvailableNow className="mt-3" />
 
         <div className="mt-7 grid grid-cols-3 gap-3 md:max-w-xl">
           {ACTIONS.map((a) => (
@@ -58,6 +98,16 @@ export default function Home() {
         ))}
       </div>
 
+      <div className="px-6 pt-4 md:px-10">
+        <input
+          type="search"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="비슷한 고민이 있었는지 검색해보세요 (예: 탈색 끊김, 펌 컬 안 나옴)"
+          className="w-full rounded-xl border border-border bg-surface-2 px-4 py-2.5 text-sm text-foreground placeholder:text-muted"
+        />
+      </div>
+
       <ul className="mt-5 grid gap-3 px-6 md:grid-cols-2 md:px-10">
         {list.map((q) => (
           <li key={q.id}>
@@ -74,7 +124,14 @@ export default function Home() {
             </Link>
           </li>
         ))}
-        {items && list.length === 0 && (
+        {items && list.length === 0 && term && (
+          <li className="rounded-2xl border border-border bg-surface p-10 text-center text-sm text-muted md:col-span-2">
+            ‘{term}’에 대한 질문이 아직 없어요.
+            <br />
+            <Link href="/ask" className="mt-2 inline-block font-semibold text-rose-400 underline">이 내용으로 질문 올리기</Link>
+          </li>
+        )}
+        {items && list.length === 0 && !term && (
           <li className="rounded-2xl border border-border bg-surface p-10 text-center text-sm text-muted md:col-span-2">
             아직 질문이 없어요.
             <br />
@@ -85,6 +142,13 @@ export default function Home() {
           <li className="rounded-2xl border border-border bg-surface p-10 text-center text-sm text-muted md:col-span-2">불러오는 중…</li>
         )}
       </ul>
+      {hasMore && (
+        <div className="mt-4 px-6 md:px-10">
+          <button onClick={loadMore} disabled={loadingMore} className="w-full rounded-xl border border-border bg-surface py-3 text-sm font-medium text-muted transition hover:text-foreground disabled:opacity-50">
+            {loadingMore ? "불러오는 중…" : "질문 더 보기"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

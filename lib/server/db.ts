@@ -148,6 +148,14 @@ function open() {
       ended_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    -- 비밀번호 찾기 인증번호(인증된 휴대폰으로 발송, 해시로 저장). 10분 유효, 5회 시도 제한.
+    CREATE TABLE IF NOT EXISTS password_resets (
+      user_id TEXT PRIMARY KEY REFERENCES users(id),
+      code_hash TEXT NOT NULL,
+      expires_at INTEGER NOT NULL,
+      attempts INTEGER NOT NULL DEFAULT 0
+    );
+
     -- 휴대폰 인증번호(해시로 저장). 5분 유효, 5회 시도 제한.
     CREATE TABLE IF NOT EXISTS phone_verifications (
       user_id TEXT PRIMARY KEY REFERENCES users(id),

@@ -1,12 +1,21 @@
 import type { Metadata, Viewport } from "next";
 import Link from "next/link";
+import { siteUrl, SITE_DESCRIPTION, SITE_NAME } from "@/lib/server/site";
 import BusinessInfo from "./components/BusinessInfo";
 import Header from "./components/Header";
 import "./globals.css";
 
+const verification: Metadata["verification"] = {
+  google: process.env.GOOGLE_SITE_VERIFICATION || undefined,
+  other: process.env.NAVER_SITE_VERIFICATION ? { "naver-site-verification": process.env.NAVER_SITE_VERIFICATION } : undefined,
+};
+
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl()),
   title: "미용 SOS - 미용인 실시간 기술 문제 해결",
   description: "지금 눈앞의 시술·매장 문제를 검증된 현직자에게 묻고 해결하세요.",
+  openGraph: { type: "website", siteName: SITE_NAME, locale: "ko_KR", title: "미용 SOS - 미용인 실시간 기술 문제 해결", description: SITE_DESCRIPTION },
+  verification,
 };
 export const viewport: Viewport = { width: "device-width", initialScale: 1 };
 

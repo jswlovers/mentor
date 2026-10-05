@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { api, CATEGORIES, jsonInit, useMe } from "@/lib/client";
+import AvailableNow from "../components/AvailableNow";
 import Avatar from "../components/Avatar";
 
 const input = "w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-foreground placeholder:text-muted";
@@ -107,6 +108,7 @@ function Ask() {
             className={`rounded-full border px-3 py-1 text-sm transition ${category === c ? "border-rose-500 bg-rose-500 text-white" : "border-border text-muted hover:text-foreground"}`}>{c}</button>
         ))}
       </div>
+      {!target && group.length === 0 && <AvailableNow category={category} />}
       <input required maxLength={100} className={input} placeholder="제목 (예: 2회 탈색 후 모발 끝이 끊어져요)" value={title} onChange={(e) => setTitle(e.target.value)} />
       <textarea required maxLength={3000} rows={5} className={input} placeholder="상황을 자세히 적어주세요" value={body} onChange={(e) => setBody(e.target.value)} />
       <input className={input} placeholder="모질 / 손상 이력 (선택)" value={hairType} onChange={(e) => setHairType(e.target.value)} />

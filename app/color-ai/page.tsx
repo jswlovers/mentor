@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ChangeEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api, jsonInit, timeAgo, useMe } from "@/lib/client";
 import { DYE_BRANDS, FAMILY_LABEL, TARGET_COLORS, TARGET_GROUPS, correctionFamilies, findShade, supportFamilies, type DyeShade, type TargetColor, type ToneFamily } from "@/lib/colorTargets";
+import { matchTargets, rgbHex } from "@/lib/colorMatch";
 import { LEVEL_CHART, levelColor, levelFromRgb } from "@/lib/levelChart";
 import { TONER_MIN_SHADE_LEVEL, currentLevelOf, isToneDown, isToning, toneDownShadeLevel } from "@/lib/toning";
 import ColorQna from "./ColorQna";
@@ -132,6 +133,7 @@ function ShadeChips({ shades, selected, onToggle }: { shades: PickerShade[]; sel
 function LevelBar({ selected, markers = [], onSelect }: { selected?: number; markers?: number[]; onSelect?: (level: number) => void }) {
   return (
     <div className="mt-3">
+      <p className="mb-2 text-[10px] text-muted">숫자가 높을수록 밝아요. 사진 참고 근사색이며 1·2는 확장값이에요. 실물 차트로 최종 확인하세요.</p>
       <div className="flex gap-0.5">
         {LEVEL_CHART.map((c) => {
           const cls = `h-8 min-w-0 flex-1 rounded-sm ${selected === c.level ? "ring-2 ring-rose-400 ring-offset-1 ring-offset-surface" : markers.includes(c.level) ? "ring-2 ring-white/80" : ""}`;
@@ -145,6 +147,109 @@ function LevelBar({ selected, markers = [], onSelect }: { selected?: number; mar
       <div className="mt-1 flex gap-0.5 text-center text-[9px] text-muted">
         {LEVEL_CHART.map((c) => <span key={c.level} className={`min-w-0 flex-1 ${selected === c.level ? "font-bold text-rose-300" : ""}`}>{c.level}</span>)}
       </div>
+    </div>
+  );
+}
+
+// 누른 위치 주변(사진 짧은 변의 6%)의 모발 평균색. 반사광(밝은 25%)과 그림자(어두운 15%)는 뺀다.
+function sampleAt(img: HTMLImageElement, x: number, y: number): { r: number; g: number; b: number } | null {
+  const scale = Math.min(1, 400 / Math.max(img.naturalWidth, img.naturalHeight));
+  const w = Math.max(1, Math.round(img.naturalWidth * scale)), h = Math.max(1, Math.round(img.naturalHeight * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  ctx.drawImage(img, 0, 0, w, h);
+  const rad = Math.max(2, Math.round(Math.min(w, h) * 0.06));
+  const cx = Math.round(x * (w - 1)), cy = Math.round(y * (h - 1));
+  const x0 = Math.max(0, cx - rad), y0 = Math.max(0, cy - rad);
+  let data: Uint8ClampedArray;
+  try {
+    data = ctx.getImageData(x0, y0, Math.min(w, cx + rad + 1) - x0, Math.min(h, cy + rad + 1) - y0).data;
+  } catch {
+    return null;
+  }
+  const list: { r: number; g: number; b: number; l: number }[] = [];
+  for (let i = 0; i < data.length; i += 4) list.push({ r: data[i], g: data[i + 1], b: data[i + 2], l: 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2] });
+  list.sort((p, q) => p.l - q.l);
+  const kept = list.slice(Math.floor(list.length * 0.15), Math.max(Math.floor(list.length * 0.15) + 1, Math.floor(list.length * 0.75)));
+  const sum = kept.reduce((a, p) => ({ r: a.r + p.r, g: a.g + p.g, b: a.b + p.b }), { r: 0, g: 0, b: 0 });
+  return { r: sum.r / kept.length, g: sum.g / kept.length, b: sum.b / kept.length };
+}
+
+// 원하는 스타일 사진에서 모발을 눌러 가장 가까운 목표 컬러와 레벨을 고른다.
+function TargetPhotoFinder({ selected, onPick }: { selected: TargetColor; onPick: (target: TargetColor, level: number) => void }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [point, setPoint] = useState<{ x: number; y: number } | null>(null);
+  const [found, setFound] = useState<{ hex: string; level: number; candidates: TargetColor[] } | null>(null);
+  const [error, setError] = useState("");
+
+  const choose = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setUrl(URL.createObjectURL(file));
+    setPoint(null);
+    setFound(null);
+    setError("");
+  };
+
+  const tap = (event: React.MouseEvent<HTMLImageElement>) => {
+    const el = event.currentTarget;
+    const rect = el.getBoundingClientRect();
+    const scale = Math.min(rect.width / el.naturalWidth, rect.height / el.naturalHeight);
+    const dw = el.naturalWidth * scale, dh = el.naturalHeight * scale;
+    const x = (event.clientX - rect.left - (rect.width - dw) / 2) / dw;
+    const y = (event.clientY - rect.top - (rect.height - dh) / 2) / dh;
+    if (x < 0 || x > 1 || y < 0 || y > 1) return;
+    const c = sampleAt(el, x, y);
+    if (!c) return setError("사진을 분석할 수 없어요.");
+    const candidates = matchTargets(c.r, c.g, c.b).map((m) => m.target);
+    const level = levelFromRgb(c.r, c.g, c.b);
+    setPoint({ x: (rect.width - dw) / 2 + x * dw, y: (rect.height - dh) / 2 + y * dh });
+    setFound({ hex: rgbHex(c.r, c.g, c.b), level, candidates });
+    setError("");
+    onPick(candidates[0], level);
+  };
+
+  return (
+    <div className="mt-2">
+      <div className="flex flex-wrap items-center gap-2 text-[11px]">
+        <label className="cursor-pointer rounded-full border border-rose-500/60 px-2.5 py-1 font-semibold text-rose-300 hover:bg-rose-500/10">
+          {url ? "다른 사진으로 찾기" : "사진으로 찾기"}
+          <input type="file" accept="image/*" onChange={choose} className="sr-only" />
+        </label>
+        {url ? <button type="button" onClick={() => { setUrl(null); setFound(null); setPoint(null); }} className="rounded-full border border-border px-2.5 py-1 text-muted hover:text-foreground">사진 닫기</button> : null}
+        {!url ? <span className="text-muted">원하는 스타일 사진에서 색을 찾아요</span> : null}
+      </div>
+      {url ? (
+        <>
+          <div className="relative mt-2 h-56 overflow-hidden rounded-xl border border-white/10 bg-black/30">
+            <img src={url} alt="목표 컬러 참고 사진" onClick={tap} className="h-full w-full cursor-crosshair object-contain" />
+            {point ? <span className="pointer-events-none absolute h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_0_0_2px_rgba(0,0,0,0.6)]" style={{ left: point.x, top: point.y }} /> : null}
+            {!found ? <p className="pointer-events-none absolute left-2 right-2 top-2 rounded-lg bg-black/70 px-3 py-1.5 text-[11px] font-semibold text-white">원하는 색이 잘 보이는 머리카락 부분을 눌러주세요</p> : null}
+          </div>
+          {found ? (
+            <div className="mt-2 rounded-lg bg-white/5 px-3 py-2 text-[11px]">
+              <div className="flex items-center gap-2">
+                <span className="h-5 w-5 shrink-0 rounded ring-1 ring-white/20" style={{ backgroundColor: found.hex }} />
+                <span className="text-muted">찾은 색 · 약 <b className="text-foreground">{found.level}레벨</b> · 가까운 컬러</span>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {found.candidates.map((c, i) => (
+                  <button key={c.name} type="button" onClick={() => onPick(c, found.level)} className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 ${selected.name === c.name ? "border-rose-500 bg-rose-500/15 font-bold text-rose-300" : "border-border text-muted hover:text-foreground"}`}>
+                    <span className="h-3 w-3 rounded-full" style={{ backgroundColor: c.color }} />
+                    {i + 1}. {c.name}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-2 leading-4 text-muted">SNS 사진은 조명·필터로 실제보다 밝거나 진하게 보일 수 있어요. 여러 곳을 눌러 비교하고 레벨은 아래 차트에서 맞춰주세요.</p>
+            </div>
+          ) : null}
+          {error ? <p className="mt-1 text-[11px] text-rose-300">{error}</p> : null}
+        </>
+      ) : null}
     </div>
   );
 }
@@ -447,7 +552,7 @@ export default function ColorAiPage() {
                 {lightOffset !== 0 ? <button type="button" onClick={resetLighting} className="rounded-full border border-border px-2.5 py-1 hover:text-foreground">조명 보정 초기화</button> : null}
               </div>
             ) : null}
-            <p className="mt-3 text-[11px] text-muted">명도 차트 (밀본 올디브 레벨 스케일 기준){analysis ? " · 흰 테두리가 현재 모발 레벨" : ""}</p>
+            <p className="mt-3 text-[11px] text-muted">명도 차트 (FIOLE·WELLA 실물 사진 참고){analysis ? " · 흰 테두리가 현재 모발 레벨" : ""}</p>
             <LevelBar markers={analysis ? [analysis.root, analysis.mid, analysis.end] : []} />
             {analysis ? <p className="mt-2 text-center text-[11px] text-muted">언더톤 · {UNDERTONE_LABEL[analysis.undertone]}</p> : null}
           </section>
@@ -467,6 +572,7 @@ export default function ColorAiPage() {
 
             <div className="mt-5">
               <div className="flex items-center justify-between"><h3 className="text-sm font-bold">목표 컬러</h3><span className="text-xs text-muted">{selectedColor.name}</span></div>
+              <TargetPhotoFinder selected={selectedColor} onPick={(color, level) => { setSelectedColor(color); setTargetLevel(level); setFormula(null); }} />
               <div className="mt-2 space-y-2">
                 {TARGET_GROUPS.map((group) => (
                   <div key={group}>

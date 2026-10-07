@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { api, jsonInit, notifyMeChanged, useMe } from "@/lib/client";
 import Avatar from "./Avatar";
@@ -25,6 +25,18 @@ export default function Header() {
     const t = setInterval(refresh, 60_000);
     return () => clearInterval(t);
   }, [poll, refresh]);
+  // 코인 잔액은 다른 곳(충전 승인·환불·상담 결제)에서도 바뀌므로, 페이지를 옮기거나 앱으로 돌아올 때 다시 불러온다
+  const pathname = usePathname();
+  useEffect(() => {
+    refresh();
+  }, [pathname, refresh]);
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [refresh]);
   const pending = me?.adminPending?.total ?? 0;
 
   const logout = async () => {

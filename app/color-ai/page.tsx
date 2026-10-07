@@ -4,7 +4,7 @@ import Link from "next/link";
 import { ChangeEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api, jsonInit, timeAgo, useMe } from "@/lib/client";
 import { DYE_BRANDS, FAMILY_LABEL, TARGET_COLORS, TARGET_GROUPS, correctionFamilies, findShade, supportFamilies, type DyeShade, type TargetColor, type ToneFamily } from "@/lib/colorTargets";
-import { matchTargets, rgbHex } from "@/lib/colorMatch";
+import { isSkinLike, labDistance, matchTargets, rgbHex, rgbToLab } from "@/lib/colorMatch";
 import { LEVEL_CHART, levelColor, levelFromRgb } from "@/lib/levelChart";
 import { TONER_MIN_SHADE_LEVEL, currentLevelOf, isToneDown, isToning, toneDownShadeLevel } from "@/lib/toning";
 import ColorQna from "./ColorQna";
@@ -18,11 +18,12 @@ type Formula = { mix: MixItem[]; developerPercent: number; ratio: string; timeMi
 type HistoryRow = { id: string; targetName: string; targetColor: string; formula: Formula; createdAt: string };
 
 type WhitePoint = { x: number; y: number };
-type Measured = Analysis & { whiteApplied: boolean; overExposed: boolean };
+type Measured = Analysis & { whiteApplied: boolean; overExposed: boolean; skinExcluded: boolean };
 
 // 사진 픽셀을 실제로 읽어 뿌리/중간/끝 3구간의 밝기(레벨)와 웜/쿨 언더톤을 계산한다.
 // 조명 영향 줄이기: ① 흰색 기준점을 찍으면 그 색이 흰색이 되도록 채널별로 보정(조명 색·밝기)
-// ② 가장자리 배경을 빼고 가운데 60%만 보고 ③ 반사광(가장 밝은 25%)과 그림자(가장 어두운 10%)를 빼고 평균낸다.
+// ② 가장자리 배경을 빼고 가운데 60%만 보고 ③ 얼굴·목 피부색 픽셀을 빼고
+// ④ 반사광(가장 밝은 25%)과 그림자(가장 어두운 10%)를 빼고 평균낸다.
 function analyzeImage(imageUrl: string, white: WhitePoint | null): Promise<Measured> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -61,7 +62,7 @@ function analyzeImage(imageUrl: string, white: WhitePoint | null): Promise<Measu
       }
 
       const bandHeight = Math.floor(h / 3);
-      let clipped = 0, total = 0;
+      let clipped = 0, total = 0, skinRemoved = 0;
       const bands = [0, bandHeight, bandHeight * 2].map((startY, i) => {
         const endY = i === 2 ? h : startY + bandHeight;
         const list: { r: number; g: number; b: number; l: number }[] = [];
@@ -74,8 +75,12 @@ function analyzeImage(imageUrl: string, white: WhitePoint | null): Promise<Measu
             list.push({ r, g, b, l: 0.2126 * r + 0.7152 * g + 0.0722 * b });
           }
         }
-        list.sort((p, q) => p.l - q.l);
-        const kept = list.slice(Math.floor(list.length * 0.1), Math.max(Math.floor(list.length * 0.1) + 1, Math.floor(list.length * 0.75)));
+        // 얼굴·목 피부를 뺀다. 피부와 비슷한 모발(핑크 베이지 등)이 대부분이면 다 빠지므로 그때는 빼지 않는다.
+        const hair = list.filter((p) => !isSkinLike(p.r, p.g, p.b));
+        skinRemoved += list.length - hair.length;
+        const use = hair.length >= list.length * 0.3 ? hair : list;
+        use.sort((p, q) => p.l - q.l);
+        const kept = use.slice(Math.floor(use.length * 0.1), Math.max(Math.floor(use.length * 0.1) + 1, Math.floor(use.length * 0.75)));
         const avg = kept.reduce((acc, p) => ({ r: acc.r + p.r, g: acc.g + p.g, b: acc.b + p.b }), { r: 0, g: 0, b: 0 });
         return { r: avg.r / kept.length, g: avg.g / kept.length, b: avg.b / kept.length };
       });
@@ -85,7 +90,7 @@ function analyzeImage(imageUrl: string, white: WhitePoint | null): Promise<Measu
       const avg = { r: (rootBand.r + midBand.r + endBand.r) / 3, g: (rootBand.g + midBand.g + endBand.g) / 3, b: (rootBand.b + midBand.b + endBand.b) / 3 };
       const warmth = (avg.r - avg.b) / 255;
       const undertone = warmth > 0.08 ? "warm" : warmth < -0.02 ? "cool" : "neutral";
-      resolve({ root: toLevel(rootBand), mid: toLevel(midBand), end: toLevel(endBand), undertone, whiteApplied: !!white, overExposed: clipped / total > 0.15 });
+      resolve({ root: toLevel(rootBand), mid: toLevel(midBand), end: toLevel(endBand), undertone, whiteApplied: !!white, overExposed: clipped / total > 0.15, skinExcluded: skinRemoved / total > 0.05 });
     };
     img.onerror = () => reject(new Error("사진을 불러오지 못했어요."));
     img.src = imageUrl;
@@ -151,8 +156,9 @@ function LevelBar({ selected, markers = [], onSelect }: { selected?: number; mar
   );
 }
 
-// 누른 위치 주변(사진 짧은 변의 6%)의 모발 평균색. 반사광(밝은 25%)과 그림자(어두운 15%)는 뺀다.
-function sampleAt(img: HTMLImageElement, x: number, y: number): { r: number; g: number; b: number } | null {
+// 누른 위치 주변(사진 짧은 변의 6%)의 모발 평균색.
+// 누른 지점 색과 비슷한 픽셀만 남겨 주변 피부·배경을 빼고, 반사광(밝은 25%)과 그림자(어두운 15%)도 뺀다.
+function sampleAt(img: HTMLImageElement, x: number, y: number): { r: number; g: number; b: number; skin: boolean } | null {
   const scale = Math.min(1, 400 / Math.max(img.naturalWidth, img.naturalHeight));
   const w = Math.max(1, Math.round(img.naturalWidth * scale)), h = Math.max(1, Math.round(img.naturalHeight * scale));
   const canvas = document.createElement("canvas");
@@ -170,12 +176,22 @@ function sampleAt(img: HTMLImageElement, x: number, y: number): { r: number; g: 
   } catch {
     return null;
   }
-  const list: { r: number; g: number; b: number; l: number }[] = [];
-  for (let i = 0; i < data.length; i += 4) list.push({ r: data[i], g: data[i + 1], b: data[i + 2], l: 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2] });
+  const rw = Math.min(w, cx + rad + 1) - x0;
+  const all: { r: number; g: number; b: number; l: number; lab: [number, number, number]; near: boolean }[] = [];
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i], g = data[i + 1], b = data[i + 2], px = x0 + ((i / 4) % rw), py = y0 + Math.floor(i / 4 / rw);
+    all.push({ r, g, b, l: 0.2126 * r + 0.7152 * g + 0.0722 * b, lab: rgbToLab(r, g, b), near: Math.abs(px - cx) <= 2 && Math.abs(py - cy) <= 2 });
+  }
+  // 누른 지점(5×5) 평균을 기준색으로 삼는다.
+  const core = all.filter((p) => p.near);
+  const ref = [0, 1, 2].map((k) => core.reduce((s, p) => s + p.lab[k], 0) / core.length) as [number, number, number];
+  let list = all.filter((p) => labDistance(p.lab, ref) < 20);
+  if (list.length < all.length * 0.2) list = [...all].sort((p, q) => labDistance(p.lab, ref) - labDistance(q.lab, ref)).slice(0, Math.ceil(all.length * 0.3));
   list.sort((p, q) => p.l - q.l);
   const kept = list.slice(Math.floor(list.length * 0.15), Math.max(Math.floor(list.length * 0.15) + 1, Math.floor(list.length * 0.75)));
   const sum = kept.reduce((a, p) => ({ r: a.r + p.r, g: a.g + p.g, b: a.b + p.b }), { r: 0, g: 0, b: 0 });
-  return { r: sum.r / kept.length, g: sum.g / kept.length, b: sum.b / kept.length };
+  const r = sum.r / kept.length, g = sum.g / kept.length, b = sum.b / kept.length;
+  return { r, g, b, skin: isSkinLike(r, g, b) };
 }
 
 // 원하는 스타일 사진에서 모발을 눌러 가장 가까운 목표 컬러와 레벨을 고른다.
@@ -209,6 +225,8 @@ function TargetPhotoFinder({ selected, onPick }: { selected: TargetColor; onPick
     const level = levelFromRgb(c.r, c.g, c.b);
     setPoint({ x: (rect.width - dw) / 2 + x * dw, y: (rect.height - dh) / 2 + y * dh });
     setFound({ hex: rgbHex(c.r, c.g, c.b), level, candidates });
+    // 피부로 보이면 자동으로 고르지 않는다. 피부와 비슷한 모발일 수도 있어 후보는 보여준다.
+    if (c.skin) return setError("누른 곳이 피부색에 가까워요. 얼굴·목이 아닌 머리카락을 눌러주세요. 피부와 비슷한 모발 색이면 아래 후보에서 직접 골라주세요.");
     setError("");
     onPick(candidates[0], level);
   };
@@ -389,7 +407,7 @@ export default function ColorAiPage() {
       setMessage(
         result.overExposed
           ? "조명이 강해 하얗게 날아간 부분이 많아요. 조명을 줄이거나 흰색 기준을 찍고, 레벨을 −/+로 확인해 주세요."
-          : "모발 분석이 완료되었습니다. 실제와 다르면 레벨을 −/+로 맞춰 주세요.",
+          : "모발 분석이 완료되었습니다. 실제와 다르면 레벨을 −/+로 맞춰 주세요." + (result.skinExcluded ? " 사진 속 얼굴·목 피부로 보이는 부분은 빼고 계산했어요." : ""),
       );
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "분석에 실패했어요.");

@@ -35,10 +35,6 @@ export function matchTargets(r: number, g: number, b: number, count = 3): { targ
     .slice(0, count);
 }
 
-export function labDistance(p: Lab, q: Lab): number {
-  return Math.sqrt((p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2 + (p[2] - q[2]) ** 2);
-}
-
 // 밝은 피부(얼굴·목·손, 그늘진 피부 포함)로 보이는 색: 밝고, 빨강 > 초록 > 파랑이며 빨강-초록 차이가 초록-파랑보다 큰 살구빛.
 // 차트 20단계와 목표 컬러로 점검했을 때 브라운·골드·베이지 모발은 걸리지 않고 핑크 베이지만 겹친다.
 export function isSkinLike(r: number, g: number, b: number): boolean {

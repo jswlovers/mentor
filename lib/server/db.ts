@@ -300,7 +300,7 @@ db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone ON users(phone) WHERE
 
 db.exec(`
   -- 휴대폰 인증번호(중복가입 방지용). 실제 SMS 연동 전이라 인증번호는 API 응답으로 그대로 돌려준다(개발/테스트용).
-  CREATE TABLE IF NOT EXISTS phone_verifications (
+  CREATE TABLE IF NOT EXISTS signup_phone_codes (
     phone TEXT PRIMARY KEY,
     code TEXT NOT NULL,
     expires_at INTEGER NOT NULL,

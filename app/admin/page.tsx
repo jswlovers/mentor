@@ -10,8 +10,12 @@ type Overview = {
   tickets: { id: number; category: string; subject: string; body: string; status: string; user_name: string; target_name: string | null; created_at: string }[];
   users: { id: string; username: string; name: string; role: string; expert_status: string; suspended_at: string | null }[];
   ledger: { id: number; account: string; direction: string; amount: number; type: string; note: string | null; created_at: string }[];
+  coinIssuance: {
+    summary: { issued: number; spent: number; balance: number; earnings: number; holders: number; members: number };
+    members: { id: string; username: string; name: string; role: string; suspended_at: string | null; issued: number; spent: number; balance: number; earnings: number }[];
+  };
 };
-const TABS = ["충전", "전문가", "출금", "문의", "회원", "원장", "메시지"] as const;
+const TABS = ["충전", "전문가", "출금", "문의", "회원", "코인 발행", "원장", "메시지"] as const;
 type MsgData = { stats: { total: number; verified: number; consented: number }; log: { id: number; channel: string; kind: string; text: string; status: string; created_at: string; user_name: string | null; username: string | null }[] };
 
 export default function Admin() {
@@ -117,6 +121,27 @@ export default function Admin() {
               ))}
               {md?.log.length === 0 && <li className="py-2 text-muted">발송 기록이 없어요</li>}
             </ul>
+          </li>
+        )}
+        {tab === "코인 발행" && (
+          <li className="space-y-3 py-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              {([["총 발행 코인", d.coinIssuance.summary.issued], ["누적 사용", d.coinIssuance.summary.spent], ["현재 유통 잔액", d.coinIssuance.summary.balance]] as const).map(([label, v]) => (
+                <div key={label} className="rounded-lg border border-border p-3"><p className="text-xs text-muted">{label}</p><p className="text-xl font-semibold tabular-nums">{v.toLocaleString()}</p></div>
+              ))}
+            </div>
+            <p className="text-xs text-muted">발행 = 충전·가입 보너스 등 회원 코인 계정에 들어간 코인(환불 제외). 사용 = 사용분에서 환불을 뺀 순사용. 전문가 수익(출금 가능) 잔액 합계 {d.coinIssuance.summary.earnings.toLocaleString()} · 코인 보유 {d.coinIssuance.summary.holders}/{d.coinIssuance.summary.members}명</p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead className="text-muted"><tr className="text-left"><th className="py-1 pr-2">순위</th><th className="pr-2">이름</th><th className="pr-2">아이디</th><th className="pr-2 text-right">현재 잔액</th><th className="pr-2 text-right">누적 발행</th><th className="pr-2 text-right">누적 사용</th><th className="text-right">전문가 수익</th></tr></thead>
+                <tbody className="divide-y divide-border">
+                  {d.coinIssuance.members.map((m, i) => (
+                    <tr key={m.id}><td className="py-1.5 pr-2">{i + 1}</td><td className="pr-2">{m.name}{m.role === "admin" ? " (관리자)" : ""}{m.suspended_at ? " (정지)" : ""}</td><td className="pr-2 text-muted">@{m.username}</td>
+                      <td className="pr-2 text-right font-semibold tabular-nums">{m.balance.toLocaleString()}</td><td className="pr-2 text-right tabular-nums">{m.issued.toLocaleString()}</td><td className="pr-2 text-right tabular-nums">{m.spent.toLocaleString()}</td><td className="text-right tabular-nums">{m.earnings ? m.earnings.toLocaleString() : "-"}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </li>
         )}
         {tab === "원장" && d.ledger.map((l) => (

@@ -10,14 +10,14 @@ const MAX_ATTEMPTS = 5;
 export const PHONE_RE = /^01[0-9]\d{7,8}$/;
 
 const upsertStmt = db.prepare(`
-  INSERT INTO phone_verifications (phone, code, expires_at, verified, attempts)
+  INSERT INTO signup_phone_codes (phone, code, expires_at, verified, attempts)
   VALUES (?, ?, ?, 0, 0)
   ON CONFLICT(phone) DO UPDATE SET code = excluded.code, expires_at = excluded.expires_at, verified = 0, attempts = 0
 `);
-const getStmt = db.prepare(`SELECT code, expires_at, verified, attempts FROM phone_verifications WHERE phone = ?`);
-const markVerifiedStmt = db.prepare(`UPDATE phone_verifications SET verified = 1 WHERE phone = ?`);
-const bumpAttemptsStmt = db.prepare(`UPDATE phone_verifications SET attempts = attempts + 1 WHERE phone = ?`);
-const deleteStmt = db.prepare(`DELETE FROM phone_verifications WHERE phone = ?`);
+const getStmt = db.prepare(`SELECT code, expires_at, verified, attempts FROM signup_phone_codes WHERE phone = ?`);
+const markVerifiedStmt = db.prepare(`UPDATE signup_phone_codes SET verified = 1 WHERE phone = ?`);
+const bumpAttemptsStmt = db.prepare(`UPDATE signup_phone_codes SET attempts = attempts + 1 WHERE phone = ?`);
+const deleteStmt = db.prepare(`DELETE FROM signup_phone_codes WHERE phone = ?`);
 const phoneTakenStmt = db.prepare(`SELECT 1 AS x FROM users WHERE phone = ?`);
 
 type VerificationRow = { code: string; expires_at: number; verified: number; attempts: number };

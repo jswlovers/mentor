@@ -16,6 +16,30 @@ const tickets = db.prepare(
    FROM support_tickets t JOIN users u ON u.id = t.user_id LEFT JOIN users tu ON tu.id = t.target_user_id
    ORDER BY (t.status = 'pending') DESC, t.id DESC LIMIT 100`,
 );
+// 코인 발행 현황. 발행 = 회원 코인 계정(user:)에 들어간 코인 중 환불을 뺀 것(충전·가입 보너스 등),
+// 사용 = 회원 코인 계정에서 나간 코인에서 환불을 뺀 순사용. 잔액 = 발행 - 사용. 전문가 수익(earn:)은 출금 가능한
+// 별도 계정이라 발행에 넣지 않고 따로 보여준다.
+const coinIssuanceStmt = db.prepare(
+  `SELECT u.id, u.username, u.name, u.role, u.suspended_at,
+     COALESCE(SUM(CASE WHEN l.account = 'user:' || u.id AND l.direction = 'credit' AND l.type != 'refund' THEN l.amount END), 0) AS issued,
+     COALESCE(SUM(CASE WHEN l.account = 'user:' || u.id AND l.direction = 'debit' THEN l.amount END), 0)
+       - COALESCE(SUM(CASE WHEN l.account = 'user:' || u.id AND l.direction = 'credit' AND l.type = 'refund' THEN l.amount END), 0) AS spent,
+     COALESCE(SUM(CASE WHEN l.account = 'earn:' || u.id THEN (CASE WHEN l.direction = 'credit' THEN l.amount ELSE -l.amount END) END), 0) AS earnings
+   FROM users u LEFT JOIN coin_ledger l ON l.account IN ('user:' || u.id, 'earn:' || u.id)
+   GROUP BY u.id`,
+);
+type IssuanceRow = { id: string; username: string; name: string; role: string; suspended_at: string | null; issued: number; spent: number; earnings: number };
+function coinIssuance() {
+  const members = (coinIssuanceStmt.all() as IssuanceRow[])
+    .map((m) => ({ ...m, balance: m.issued - m.spent }))
+    .sort((a, b) => b.balance - a.balance || b.issued - a.issued);
+  const sum = (key: "issued" | "spent" | "balance" | "earnings") => members.reduce((s, m) => s + m[key], 0);
+  return {
+    summary: { issued: sum("issued"), spent: sum("spent"), balance: sum("balance"), earnings: sum("earnings"),
+      holders: members.filter((m) => m.balance > 0).length, members: members.length },
+    members,
+  };
+}
 const users = db.prepare(`SELECT id, username, name, role, expert_status, suspended_at FROM users ORDER BY created_at DESC LIMIT 200`);
 
 export async function GET(req: Request) {
@@ -28,5 +52,6 @@ export async function GET(req: Request) {
     tickets: tickets.all(),
     users: users.all(),
     ledger: getRecentLedger(),
+    coinIssuance: coinIssuance(),
   });
 }

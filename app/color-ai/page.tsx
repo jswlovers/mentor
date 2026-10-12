@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ChangeEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { api, jsonInit, timeAgo, useMe } from "@/lib/client";
+import { api, jsonInit, notifyMeChanged, timeAgo, useMe } from "@/lib/client";
 import { DYE_BRANDS, FAMILY_LABEL, TARGET_COLORS, TARGET_GROUPS, correctionFamilies, findShade, supportFamilies, type DyeShade, type TargetColor, type ToneFamily } from "@/lib/colorTargets";
 import { isSkinLike, matchTargets, rgbHex } from "@/lib/colorMatch";
 import { GRAY_PERCENTS, LEVEL_CHART, grayHistoryLabel, levelColor, levelFromRgb } from "@/lib/levelChart";
@@ -16,6 +16,7 @@ type Analysis = { root: number; mid: number; end: number; undertone: "warm" | "c
 type MixItem = { tube: string; grams: number; owned: boolean };
 type Formula = { mix: MixItem[]; developerPercent: number; ratio: string; timeMinutes: number; order: string; matchScore: number; notes: string[]; guide?: { title: string; steps: string[] } };
 type HistoryRow = { id: string; targetName: string; targetColor: string; formula: Formula; createdAt: string };
+type Usage = { plan: string; planLabel: string; limit: number; used: number; remaining: number };
 
 type WhitePoint = { x: number; y: number };
 // 사진 안의 영역(0~1 비율). x0<x1, y0<y1
@@ -413,10 +414,15 @@ export default function ColorAiPage() {
   const [formula, setFormula] = useState<Formula | null>(null);
   const [message, setMessage] = useState("");
   const [recent, setRecent] = useState<HistoryRow[]>([]);
+  const [usage, setUsage] = useState<Usage | null>(null);
+  const [extraCost, setExtraCost] = useState(0);
 
   const loadRecent = useCallback(async () => {
-    const r = await api<{ recommendations: HistoryRow[] }>("/api/color-ai");
-    if (r.ok) setRecent(r.data.recommendations);
+    const r = await api<{ recommendations: HistoryRow[]; usage: Usage | null; extraCost: number }>("/api/color-ai");
+    if (!r.ok) return;
+    setRecent(r.data.recommendations);
+    setUsage(r.data.usage);
+    setExtraCost(r.data.extraCost);
   }, []);
 
   useEffect(() => {
@@ -503,16 +509,22 @@ export default function ColorAiPage() {
     setMessage("조명 보정을 초기화했어요.");
   };
 
-  const createRecommendation = async () => {
+  // 이번 달 횟수를 다 썼으면 서버가 402(needCoins)를 주고, 확인을 받은 뒤 useCoins로 다시 보낸다.
+  const createRecommendation = async (useCoins = false) => {
     if (!analysis) {
       setMessage("먼저 모발 사진을 분석해 주세요.");
       return;
     }
+    if (!me) {
+      setMessage("로그인 후 AI 배합 추천을 받을 수 있어요.");
+      return;
+    }
     setRecommending(true);
     setMessage("");
-    const r = await api<{ id: string; formula: Formula }>(
+    const r = await api<{ id: string; formula: Formula; charged: number; usage: Usage; needCoins?: boolean; cost?: number; coins?: number }>(
       "/api/color-ai",
       jsonInit("POST", {
+        useCoins,
         rootLevel: analysis.root,
         midLevel: analysis.mid,
         endLevel: analysis.end,
@@ -526,12 +538,20 @@ export default function ColorAiPage() {
       }),
     );
     setRecommending(false);
+    if (r.data.needCoins && r.data.cost) {
+      if (window.confirm(`${r.data.error}.
+${r.data.cost.toLocaleString()}코인으로 1회 더 추천받을까요? (보유 ${(r.data.coins ?? 0).toLocaleString()}코인)`)) return createRecommendation(true);
+      setMessage(`${r.data.error}. 다음 달 1일에 다시 채워져요.`);
+      return;
+    }
     if (!r.ok) {
       setMessage(r.data.error || "추천에 실패했어요.");
       return;
     }
     setFormula(r.data.formula);
-    setMessage("현재 밝기와 잔류 색소를 반영해 배합을 추천했습니다.");
+    setUsage(r.data.usage);
+    if (r.data.charged) notifyMeChanged();
+    setMessage(r.data.charged ? `${r.data.charged.toLocaleString()}코인을 사용해 배합을 추천했습니다.` : "현재 밝기와 잔류 색소를 반영해 배합을 추천했습니다.");
     loadRecent();
   };
 
@@ -702,7 +722,14 @@ export default function ColorAiPage() {
               <p className="mt-2 text-[10px] leading-4 text-muted">출처: {[...new Set(visibleLines.map((l) => l.source))].join(" · ")}</p>
             </div>
 
-            <button type="button" onClick={createRecommendation} disabled={recommending} className="mt-6 w-full rounded-xl bg-rose-500 py-3.5 font-bold text-white transition hover:bg-rose-400 disabled:opacity-50">{recommending ? "추천 계산 중..." : "AI 배합 추천 받기"}</button>
+            <button type="button" onClick={() => createRecommendation()} disabled={recommending} className="mt-6 w-full rounded-xl bg-rose-500 py-3.5 font-bold text-white transition hover:bg-rose-400 disabled:opacity-50">{recommending ? "추천 계산 중..." : "AI 배합 추천 받기"}</button>
+            <p className="mt-2 text-center text-[11px] text-muted">
+              {me === null ? <><Link href="/login" className="text-rose-400 underline">로그인</Link>하면 매월 무료로 AI 추천을 받을 수 있어요</> : usage ? (
+                usage.remaining > 0
+                  ? <>{usage.planLabel} 플랜 · 이번 달 <b className="text-foreground">{usage.remaining}회</b> 남음 (월 {usage.limit}회)</>
+                  : <>{usage.planLabel} 플랜 월 {usage.limit}회를 모두 썼어요 · 추가 1회 {extraCost.toLocaleString()}코인</>
+              ) : null}
+            </p>
             {message ? <p className="mt-3 text-center text-xs text-rose-400" role="status">{message}</p> : null}
           </section>
         </div>

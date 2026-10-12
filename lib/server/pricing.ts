@@ -36,6 +36,20 @@ export const COST_PER_SEC = { voice: 10, video: 100 } as const;
 export const ENTRY_MIN_COINS = 3000; // 이 이하면 통화 시작/참여 불가
 export const CONTINUE_MIN_COINS = 1500; // 통화 중 이 이하로 떨어지면 강제 종료
 
+/**
+ * 4. 컬러핏 AI 구독: 플랜별 월 AI 배합 추천 횟수(매월 1일 KST에 리셋). 횟수를 다 쓰면 1회당 COLORFIT_EXTRA_COST 코인.
+ *    외부 AI API를 붙여도 남도록 1회 원가 50원 가정으로 맞춘 값이다. 정기결제는 아직 없어 플랜은 users.colorfit_plan으로만 바뀐다.
+ */
+export const COLORFIT_PLANS = {
+  free: { label: "무료", price: 0, monthly: 1 },
+  basic: { label: "베이직", price: 5_900, monthly: 10 },
+  standard: { label: "스탠다드", price: 9_900, monthly: 30 },
+  pro: { label: "프로", price: 14_900, monthly: 70 },
+} as const;
+export type ColorfitPlan = keyof typeof COLORFIT_PLANS;
+export const isColorfitPlan = (v: unknown): v is ColorfitPlan => typeof v === "string" && Object.hasOwn(COLORFIT_PLANS, v);
+export const COLORFIT_EXTRA_COST = 300;
+
 /** 정산 기본값: 질문자가 낸 금액 중 전문가에게 돌아가는 비율. 실제 수수료율은 관리자 페이지에서 등급별로 정한다(lib/server/commission.ts). */
 export const EXPERT_SHARE = 0.7;
 export const MIN_WITHDRAW_COINS = 10_000;

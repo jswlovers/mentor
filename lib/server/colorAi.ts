@@ -2,6 +2,7 @@
 // 규칙 기반으로 염모제 배합을 계산한다. 외부 AI API는 쓰지 않는다.
 // 염모제는 브랜드별 카탈로그(lib/dyeCatalog.ts)의 넘버 id로 받는다.
 import { db } from "./db";
+import { COLORFIT_PLANS, isColorfitPlan, type ColorfitPlan } from "./pricing";
 import { harmonyNotes } from "../colorHarmony";
 import { grayHistoryLabel, grayPercentOf } from "../levelChart";
 import { proRecipeNotes } from "../proRecipes";
@@ -326,12 +327,12 @@ export function computeRecommendation(input: RecommendInput): Formula {
 }
 
 const insertStmt = db.prepare(
-  `INSERT INTO color_ai_recommendations (id, user_id, root_level, mid_level, end_level, undertone, target_name, target_level, target_color, history, tubes, formula)
-   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  `INSERT INTO color_ai_recommendations (id, user_id, root_level, mid_level, end_level, undertone, target_name, target_level, target_color, history, tubes, formula, coins_charged)
+   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 );
 const listStmt = db.prepare(`SELECT * FROM color_ai_recommendations WHERE user_id = ? ORDER BY id DESC LIMIT ?`);
 
-export function saveRecommendation(userId: string, id: string, input: RecommendInput, formula: Formula) {
+export function saveRecommendation(userId: string, id: string, input: RecommendInput, formula: Formula, coinsCharged = 0) {
   const target = TARGET_COLORS.find((c) => c.name === input.targetName) ?? TARGET_COLORS[0];
   insertStmt.run(
     id,
@@ -346,6 +347,7 @@ export function saveRecommendation(userId: string, id: string, input: RecommendI
     JSON.stringify(input.history),
     JSON.stringify(input.tubes),
     JSON.stringify(formula),
+    coinsCharged,
   );
 }
 
@@ -363,4 +365,29 @@ export type RecommendationRow = {
 
 export function listRecommendations(userId: string, limit = 5) {
   return listStmt.all(userId, limit) as RecommendationRow[];
+}
+
+// ---- 컬러핏 AI 월 이용 횟수 ----
+
+const planStmt = db.prepare(`SELECT colorfit_plan FROM users WHERE id = ?`);
+const usedStmt = db.prepare(
+  `SELECT COUNT(*) AS n FROM color_ai_recommendations WHERE user_id = ? AND coins_charged = 0 AND created_at >= ?`,
+);
+
+/** 이번 달(한국 시간 1일 0시) 시작을 created_at과 같은 UTC 'YYYY-MM-DD HH:MM:SS' 형식으로. */
+function monthStartUtc(now = new Date()): string {
+  const kst = new Date(now.getTime() + 9 * 3600_000);
+  const start = new Date(Date.UTC(kst.getUTCFullYear(), kst.getUTCMonth(), 1) - 9 * 3600_000);
+  return start.toISOString().slice(0, 19).replace("T", " ");
+}
+
+export type ColorfitUsage = { plan: ColorfitPlan; planLabel: string; limit: number; used: number; remaining: number };
+
+/** 플랜의 월 횟수 중 이번 달에 쓴 만큼(코인으로 낸 추천은 빼고). */
+export function getColorfitUsage(userId: string): ColorfitUsage {
+  const raw = (planStmt.get(userId) as { colorfit_plan: string } | undefined)?.colorfit_plan;
+  const plan: ColorfitPlan = isColorfitPlan(raw) ? raw : "free";
+  const limit = COLORFIT_PLANS[plan].monthly;
+  const used = (usedStmt.get(userId, monthStartUtc()) as { n: number }).n;
+  return { plan, planLabel: COLORFIT_PLANS[plan].label, limit, used, remaining: Math.max(0, limit - used) };
 }

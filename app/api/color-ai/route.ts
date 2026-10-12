@@ -27,7 +27,7 @@ export async function GET(req: Request) {
   return Response.json({ recommendations: rows });
 }
 
-// 명도 차트(밀본 올디브 레벨 스케일) 1~20레벨.
+// 명도 차트(FIOLE·WELLA 실물 사진 참고) 1~20레벨.
 function isLevel(n: unknown): n is number {
   return typeof n === "number" && Number.isInteger(n) && n >= 1 && n <= 20;
 }

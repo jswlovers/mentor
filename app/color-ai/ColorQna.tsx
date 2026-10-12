@@ -17,6 +17,8 @@ type AskResult = { matched: boolean; answer: Answer | null; related: Related[] }
 type Source = { id: string; title: string; author: string; url: string; topics: Related[] };
 
 const SAMPLE_QUESTIONS = [
+  "레벨 차트와 명도 차트는 어떻게 읽나요?",
+  "웰라 차트의 백모 비율과 레벨은 같은 건가요?",
   "칩과 피치가 뭐예요?",
   "하이라이트를 자연스럽게 블랜드하려면?",
   "호일 워크 비율은 어떻게 잡나요?",

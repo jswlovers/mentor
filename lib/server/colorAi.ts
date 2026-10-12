@@ -3,6 +3,7 @@
 // 염모제는 브랜드별 카탈로그(lib/dyeCatalog.ts)의 넘버 id로 받는다.
 import { db } from "./db";
 import { harmonyNotes } from "../colorHarmony";
+import { grayHistoryLabel, grayPercentOf } from "../levelChart";
 import { proRecipeNotes } from "../proRecipes";
 import { HUE_LABEL, complement, underlyingPigment } from "../colorWheel";
 import {
@@ -35,7 +36,8 @@ export { TARGET_COLORS };
 
 export type Undertone = "warm" | "cool" | "neutral";
 
-export const HISTORY_OPTIONS = ["탈색 1회", "흑염색 이력", "손상모", "새치 30%"] as const;
+// 새치는 "새치 N%"(명도 차트 옆 새치 % 차트에서 고른 값)로 따로 받는다.
+export const HISTORY_OPTIONS = ["탈색 1회", "흑염색 이력", "손상모"] as const;
 
 export type RecommendInput = {
   rootLevel: number;
@@ -85,7 +87,11 @@ const familyNames = (fs: readonly ToneFamily[]) => fs.map((f) => FAMILY_LABEL[f]
 
 export function computeRecommendation(input: RecommendInput): Formula {
   const target = findTarget(input.targetName) ?? TARGET_COLORS[0];
-  const history = input.history.filter((h) => (HISTORY_OPTIONS as readonly string[]).includes(h));
+  const grayPercent = grayPercentOf(input.history) ?? 0;
+  const history = [
+    ...input.history.filter((h) => (HISTORY_OPTIONS as readonly string[]).includes(h)),
+    ...(grayPercent ? [grayHistoryLabel(grayPercent)] : []),
+  ];
   const owned = input.tubes.map(findShade).filter((r): r is ShadeRef => !!r);
   const brand = input.brandId ? findBrand(input.brandId) : owned[0]?.brand;
   const mainFamilies: readonly ToneFamily[] = target.families;
@@ -248,14 +254,19 @@ export function computeRecommendation(input: RecommendInput): Formula {
   let timeMinutes = 30;
   if (history.includes("손상모")) timeMinutes -= 8;
   if (history.includes("탈색 1회")) timeMinutes -= 5;
-  if (history.includes("새치 30%")) timeMinutes += 6;
+  // 새치가 많을수록 색이 덜 들어가 방치 시간을 늘린다.
+  if (grayPercent >= 50) timeMinutes += 10;
+  else if (grayPercent >= 30) timeMinutes += 6;
+  else if (grayPercent > 0) timeMinutes += 3;
   if (history.includes("흑염색 이력")) timeMinutes += 4;
   timeMinutes = clamp(timeMinutes, 15, 45);
   if (toning) timeMinutes = clamp((clearPart >= 2 ? 10 : 15) - (history.includes("손상모") ? 5 : 0), 5, 20);
 
   if (history.includes("손상모")) notes.push(`끝 모발 손상도가 높아 마지막 ${Math.max(5, timeMinutes - 20)}분만 도포하세요.`);
   if (history.includes("흑염색 이력")) notes.push("흑염색 이력이 있어 탈색이 고르지 않을 수 있어요. 스트랜드 테스트를 진행하세요.");
-  if (history.includes("새치 30%")) notes.push("새치가 많은 뿌리 부위는 5g을 추가로 밀착 도포하세요.");
+  if (grayPercent >= 30) notes.push(`새치 ${grayPercent}%: 새치가 많은 뿌리 부위는 5g을 추가로 밀착 도포하세요.`);
+  if (grayPercent >= 50) notes.push(`새치 ${grayPercent}%라 패션 컬러만으로는 커버가 약해요. 새치 전용 라인이나 같은 레벨의 내추럴(N) 톤을 섞어 커버력을 높이세요.`);
+  else if (grayPercent > 0 && grayPercent < 30) notes.push(`새치 ${grayPercent}%: 흰 모발이 살짝 밝게 비칠 수 있어요.`);
   if (history.includes("흑염색 이력")) matchScore -= 5;
 
   const order = toning

@@ -5,11 +5,11 @@ import { ChangeEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { api, jsonInit, timeAgo, useMe } from "@/lib/client";
 import { DYE_BRANDS, FAMILY_LABEL, TARGET_COLORS, TARGET_GROUPS, correctionFamilies, findShade, supportFamilies, type DyeShade, type TargetColor, type ToneFamily } from "@/lib/colorTargets";
 import { isSkinLike, matchTargets, rgbHex } from "@/lib/colorMatch";
-import { LEVEL_CHART, levelColor, levelFromRgb } from "@/lib/levelChart";
+import { GRAY_PERCENTS, LEVEL_CHART, grayHistoryLabel, levelColor, levelFromRgb } from "@/lib/levelChart";
 import { TONER_MIN_SHADE_LEVEL, currentLevelOf, isToneDown, isToning, toneDownShadeLevel } from "@/lib/toning";
 import ColorQna from "./ColorQna";
 
-const histories = ["탈색 1회", "흑염색 이력", "손상모", "새치 30%"];
+const histories = ["탈색 1회", "흑염색 이력", "손상모"];
 const UNDERTONE_LABEL: Record<string, string> = { warm: "웜(잔류 오렌지)", cool: "쿨(애쉬)", neutral: "중성" };
 
 type Analysis = { root: number; mid: number; end: number; undertone: "warm" | "cool" | "neutral" };
@@ -157,6 +157,34 @@ function LevelBar({ selected, markers = [], onSelect }: { selected?: number; mar
       </div>
       <div className="mt-1 flex gap-0.5 text-center text-[9px] text-muted">
         {LEVEL_CHART.map((c) => <span key={c.level} className={`min-w-0 flex-1 ${selected === c.level ? "font-bold text-rose-300" : ""}`}>{c.level}</span>)}
+      </div>
+    </div>
+  );
+}
+
+// 새치(백모) % 차트. 칸마다 어두운 모발 사이로 흰 모발이 그 비율만큼 섞인 모습을 보여준다. 같은 칸을 다시 누르면 해제.
+function GrayBar({ selected, onSelect, hairLevel = 5 }: { selected: number; onSelect: (percent: number) => void; hairLevel?: number }) {
+  const hair = levelColor(hairLevel);
+  return (
+    <div className="mt-2">
+      <div className="flex gap-1">
+        {GRAY_PERCENTS.map((p) => {
+          const white = (p / 100) * 4;
+          return (
+            <button
+              key={p}
+              type="button"
+              aria-label={`새치 ${p}%`}
+              aria-pressed={selected === p}
+              onClick={() => onSelect(selected === p ? 0 : p)}
+              style={{ backgroundImage: `repeating-linear-gradient(100deg, #e8e6df 0 ${white}px, ${hair} ${white}px 4px)` }}
+              className={`h-8 min-w-0 flex-1 rounded-sm ring-1 ring-white/15 ${selected === p ? "ring-2 ring-rose-400 ring-offset-1 ring-offset-surface" : ""}`}
+            />
+          );
+        })}
+      </div>
+      <div className="mt-1 flex gap-1 text-center text-[10px] text-muted">
+        {GRAY_PERCENTS.map((p) => <span key={p} className={`min-w-0 flex-1 ${selected === p ? "font-bold text-rose-300" : ""}`}>{p}%</span>)}
       </div>
     </div>
   );
@@ -380,6 +408,7 @@ export default function ColorAiPage() {
   const [selectedColor, setSelectedColor] = useState<TargetColor>(TARGET_COLORS[0]);
   const [targetLevel, setTargetLevel] = useState<number>(TARGET_COLORS[0].level);
   const [selectedHistory, setSelectedHistory] = useState<string[]>([]);
+  const [grayPercent, setGrayPercent] = useState(0);
   const [brandId, setBrandId] = useState(DYE_BRANDS[0].id);
   const [lineId, setLineId] = useState("all");
   const [showAllShades, setShowAllShades] = useState(false);
@@ -518,7 +547,7 @@ export default function ColorAiPage() {
         undertone: analysis.undertone,
         targetName: selectedColor.name,
         targetLevel,
-        history: selectedHistory,
+        history: grayPercent ? [...selectedHistory, grayHistoryLabel(grayPercent)] : selectedHistory,
         brandId,
         tubes: selectedTubes,
         thickness,
@@ -646,6 +675,9 @@ export default function ColorAiPage() {
               <div className="mt-2 flex flex-wrap gap-2">
                 {histories.map((history) => <button key={history} type="button" onClick={() => toggle(history, selectedHistory, setSelectedHistory)} className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${selectedHistory.includes(history) ? "border-rose-500 bg-rose-500/15 text-rose-300" : "border-border text-muted hover:text-foreground"}`}>{history}</button>)}
               </div>
+              <div className="mt-4 flex items-center justify-between"><h3 className="text-sm font-bold">새치 비율</h3><span className="text-xs text-muted">{grayPercent ? `새치 ${grayPercent}%` : "없음"} · 칸을 눌러 선택</span></div>
+              <GrayBar selected={grayPercent} onSelect={setGrayPercent} hairLevel={analysis ? Math.max(4, analysis.root) : 5} />
+              <p className="mt-1 text-[10px] text-muted">명도 차트와 비교해 흰 모발이 섞인 정도가 가장 비슷한 칸을 골라주세요. 레벨과는 별개 값이에요.</p>
             </div>
 
             <div className="mt-5">

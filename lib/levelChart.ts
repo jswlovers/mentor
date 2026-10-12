@@ -56,3 +56,19 @@ export function levelFromRgb(r: number, g: number, b: number): number {
   for (const c of CHART_L) if (Math.abs(c.l - l) < Math.abs(best.l - l)) best = c;
   return best.level;
 }
+
+// 새치(백모) 비율 차트. WELLA 차트 왼쪽 백모 비율처럼 칸을 골라 쓴다. 명도 레벨과는 별개 값이다.
+export const GRAY_PERCENTS = [10, 30, 50, 70, 100] as const;
+
+export function grayHistoryLabel(percent: number): string {
+  return `새치 ${percent}%`;
+}
+
+// "새치 50%" 같은 시술 이력 문자열에서 비율을 읽는다. 차트에 없는 값이면 null.
+export function grayPercentOf(history: readonly string[]): number | null {
+  for (const h of history) {
+    const m = /^새치 (\d+)%$/.exec(h);
+    if (m && (GRAY_PERCENTS as readonly number[]).includes(Number(m[1]))) return Number(m[1]);
+  }
+  return null;
+}

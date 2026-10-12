@@ -286,6 +286,10 @@ function TargetPhotoFinder({ selected, onPick }: { selected: TargetColor; onPick
           {url ? "다른 사진으로 찾기" : "사진으로 찾기"}
           <input type="file" accept="image/*" onChange={choose} className="sr-only" />
         </label>
+        <label className="cursor-pointer rounded-full border border-rose-500/60 px-2.5 py-1 font-semibold text-rose-300 hover:bg-rose-500/10">
+          카메라로 촬영
+          <input type="file" accept="image/*" capture="environment" onChange={choose} className="sr-only" />
+        </label>
         {url ? <button type="button" onClick={() => { setUrl(null); setFound(null); setBox(null); }} className="rounded-full border border-border px-2.5 py-1 text-muted hover:text-foreground">사진 닫기</button> : null}
         {!url ? <span className="text-muted">원하는 스타일 사진에서 색을 찾아요</span> : null}
       </div>

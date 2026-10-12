@@ -249,7 +249,7 @@ if (process.env.P1 === "1") {
   check("미승인 전문가는 목록에 없음", !(await pub("/api/experts")).data.some((e) => e.name === nm.pend));
   list = (await pub(`/api/experts?q=${encodeURIComponent("펌 전문")}`)).data;
   check("검색어(한 줄 소개) 필터", list.length === 1 && list[0].name === nm.expB, JSON.stringify(list.map((e) => e.name)));
-  check("표본 부족 시 평균 응답시간 숨김", list[0].avgResponseMinutes === null);
+  check("표본 부족 시 응답시간 숨김", list[0].medianResponseMinutes === null);
   const allExperts = (await pub("/api/experts")).data;
   const idOf = (name) => (allExperts.find((e) => e.name === name) ?? {}).id;
   const idA = idOf(nm.expA), idB = idOf(nm.expB);

@@ -1,3 +1,4 @@
+import { notifyAdmins } from "@/lib/server/adminAlerts";
 import { db } from "@/lib/server/db";
 import { getUser, limited, unauthorized } from "@/lib/server/http";
 import { applyAutoModeration } from "@/lib/server/moderation";
@@ -38,5 +39,6 @@ export async function POST(req: Request) {
   }
   insert.run(user.id, category, subject, body, targetId);
   if (targetId) applyAutoModeration(targetId);
+  notifyAdmins("문의", `${user.name} · ${{ complaint: "불만", refund: "환불", report: "신고", other: "기타" }[category]} · ${subject.slice(0, 30)}`);
   return Response.json({ ok: true }, { status: 201 });
 }

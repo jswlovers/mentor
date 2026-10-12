@@ -1,6 +1,5 @@
 import crypto from "node:crypto";
 import { db } from "./db";
-import { EXPERT_SHARE } from "./pricing";
 
 export class InsufficientCoinsError extends Error {
   constructor() {
@@ -69,13 +68,13 @@ export function refundFromRevenue(userId: string, amount: number, note?: string)
   ]);
 }
 
-/** 전문가 몫 정산: 질문자가 낸 금액(amount)의 EXPERT_SHARE 비율을 플랫폼 매출에서 전문가 수익 계정으로 옮긴다. */
-export function settleToExpert(expertId: string, amount: number, note?: string) {
-  const share = Math.floor(amount * EXPERT_SHARE);
-  if (share <= 0) return;
+/** 전문가 몫 정산: 질문자가 낸 금액(amount)의 share 비율(상담에 고정된 수수료율을 뺀 몫)을 플랫폼 매출에서 전문가 수익 계정으로 옮긴다. */
+export function settleToExpert(expertId: string, amount: number, share: number, note?: string) {
+  const earned = Math.floor(amount * share);
+  if (earned <= 0) return;
   post([
-    { account: "platform:revenue", direction: "debit", amount: share, type: "expert_earning", note },
-    { account: earnAcct(expertId), direction: "credit", amount: share, userId: expertId, type: "expert_earning", note },
+    { account: "platform:revenue", direction: "debit", amount: earned, type: "expert_earning", note },
+    { account: earnAcct(expertId), direction: "credit", amount: earned, userId: expertId, type: "expert_earning", note },
   ]);
 }
 

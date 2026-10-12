@@ -2,7 +2,10 @@
 // 규칙 기반으로 염모제 배합을 계산한다. 외부 AI API는 쓰지 않는다.
 // 염모제는 브랜드별 카탈로그(lib/dyeCatalog.ts)의 넘버 id로 받는다.
 import { db } from "./db";
+import { COLORFIT_PLANS, isColorfitPlan, type ColorfitPlan } from "./pricing";
 import { harmonyNotes } from "../colorHarmony";
+import { grayHistoryLabel, grayPercentOf } from "../levelChart";
+import { proRecipeNotes } from "../proRecipes";
 import { HUE_LABEL, complement, underlyingPigment } from "../colorWheel";
 import {
   BLEACH_LEVEL,
@@ -34,7 +37,8 @@ export { TARGET_COLORS };
 
 export type Undertone = "warm" | "cool" | "neutral";
 
-export const HISTORY_OPTIONS = ["탈색 1회", "흑염색 이력", "손상모", "새치 30%"] as const;
+// 새치는 "새치 N%"(명도 차트 옆 새치 % 차트에서 고른 값)로 따로 받는다.
+export const HISTORY_OPTIONS = ["탈색 1회", "흑염색 이력", "손상모"] as const;
 
 export type RecommendInput = {
   rootLevel: number;
@@ -84,7 +88,11 @@ const familyNames = (fs: readonly ToneFamily[]) => fs.map((f) => FAMILY_LABEL[f]
 
 export function computeRecommendation(input: RecommendInput): Formula {
   const target = findTarget(input.targetName) ?? TARGET_COLORS[0];
-  const history = input.history.filter((h) => (HISTORY_OPTIONS as readonly string[]).includes(h));
+  const grayPercent = grayPercentOf(input.history) ?? 0;
+  const history = [
+    ...input.history.filter((h) => (HISTORY_OPTIONS as readonly string[]).includes(h)),
+    ...(grayPercent ? [grayHistoryLabel(grayPercent)] : []),
+  ];
   const owned = input.tubes.map(findShade).filter((r): r is ShadeRef => !!r);
   const brand = input.brandId ? findBrand(input.brandId) : owned[0]?.brand;
   const mainFamilies: readonly ToneFamily[] = target.families;
@@ -247,14 +255,19 @@ export function computeRecommendation(input: RecommendInput): Formula {
   let timeMinutes = 30;
   if (history.includes("손상모")) timeMinutes -= 8;
   if (history.includes("탈색 1회")) timeMinutes -= 5;
-  if (history.includes("새치 30%")) timeMinutes += 6;
+  // 새치가 많을수록 색이 덜 들어가 방치 시간을 늘린다.
+  if (grayPercent >= 50) timeMinutes += 10;
+  else if (grayPercent >= 30) timeMinutes += 6;
+  else if (grayPercent > 0) timeMinutes += 3;
   if (history.includes("흑염색 이력")) timeMinutes += 4;
   timeMinutes = clamp(timeMinutes, 15, 45);
   if (toning) timeMinutes = clamp((clearPart >= 2 ? 10 : 15) - (history.includes("손상모") ? 5 : 0), 5, 20);
 
   if (history.includes("손상모")) notes.push(`끝 모발 손상도가 높아 마지막 ${Math.max(5, timeMinutes - 20)}분만 도포하세요.`);
   if (history.includes("흑염색 이력")) notes.push("흑염색 이력이 있어 탈색이 고르지 않을 수 있어요. 스트랜드 테스트를 진행하세요.");
-  if (history.includes("새치 30%")) notes.push("새치가 많은 뿌리 부위는 5g을 추가로 밀착 도포하세요.");
+  if (grayPercent >= 30) notes.push(`새치 ${grayPercent}%: 새치가 많은 뿌리 부위는 5g을 추가로 밀착 도포하세요.`);
+  if (grayPercent >= 50) notes.push(`새치 ${grayPercent}%라 패션 컬러만으로는 커버가 약해요. 새치 전용 라인이나 같은 레벨의 내추럴(N) 톤을 섞어 커버력을 높이세요.`);
+  else if (grayPercent > 0 && grayPercent < 30) notes.push(`새치 ${grayPercent}%: 흰 모발이 살짝 밝게 비칠 수 있어요.`);
   if (history.includes("흑염색 이력")) matchScore -= 5;
 
   const order = toning
@@ -306,6 +319,7 @@ export function computeRecommendation(input: RecommendInput): Formula {
   }
 
   notes.push(...harmonyNotes(target.name));
+  notes.push(...proRecipeNotes(target.name, brand?.id));
 
   notes.push("AI 추천은 보조 정보이며 실제 모발 상태에 따른 디자이너의 최종 판단이 필요합니다.");
 
@@ -313,12 +327,12 @@ export function computeRecommendation(input: RecommendInput): Formula {
 }
 
 const insertStmt = db.prepare(
-  `INSERT INTO color_ai_recommendations (id, user_id, root_level, mid_level, end_level, undertone, target_name, target_level, target_color, history, tubes, formula)
-   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  `INSERT INTO color_ai_recommendations (id, user_id, root_level, mid_level, end_level, undertone, target_name, target_level, target_color, history, tubes, formula, coins_charged)
+   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 );
 const listStmt = db.prepare(`SELECT * FROM color_ai_recommendations WHERE user_id = ? ORDER BY id DESC LIMIT ?`);
 
-export function saveRecommendation(userId: string, id: string, input: RecommendInput, formula: Formula) {
+export function saveRecommendation(userId: string, id: string, input: RecommendInput, formula: Formula, coinsCharged = 0) {
   const target = TARGET_COLORS.find((c) => c.name === input.targetName) ?? TARGET_COLORS[0];
   insertStmt.run(
     id,
@@ -333,6 +347,7 @@ export function saveRecommendation(userId: string, id: string, input: RecommendI
     JSON.stringify(input.history),
     JSON.stringify(input.tubes),
     JSON.stringify(formula),
+    coinsCharged,
   );
 }
 
@@ -350,4 +365,29 @@ export type RecommendationRow = {
 
 export function listRecommendations(userId: string, limit = 5) {
   return listStmt.all(userId, limit) as RecommendationRow[];
+}
+
+// ---- 컬러핏 AI 월 이용 횟수 ----
+
+const planStmt = db.prepare(`SELECT colorfit_plan FROM users WHERE id = ?`);
+const usedStmt = db.prepare(
+  `SELECT COUNT(*) AS n FROM color_ai_recommendations WHERE user_id = ? AND coins_charged = 0 AND created_at >= ?`,
+);
+
+/** 이번 달(한국 시간 1일 0시) 시작을 created_at과 같은 UTC 'YYYY-MM-DD HH:MM:SS' 형식으로. */
+function monthStartUtc(now = new Date()): string {
+  const kst = new Date(now.getTime() + 9 * 3600_000);
+  const start = new Date(Date.UTC(kst.getUTCFullYear(), kst.getUTCMonth(), 1) - 9 * 3600_000);
+  return start.toISOString().slice(0, 19).replace("T", " ");
+}
+
+export type ColorfitUsage = { plan: ColorfitPlan; planLabel: string; limit: number; used: number; remaining: number };
+
+/** 플랜의 월 횟수 중 이번 달에 쓴 만큼(코인으로 낸 추천은 빼고). */
+export function getColorfitUsage(userId: string): ColorfitUsage {
+  const raw = (planStmt.get(userId) as { colorfit_plan: string } | undefined)?.colorfit_plan;
+  const plan: ColorfitPlan = isColorfitPlan(raw) ? raw : "free";
+  const limit = COLORFIT_PLANS[plan].monthly;
+  const used = (usedStmt.get(userId, monthStartUtc()) as { n: number }).n;
+  return { plan, planLabel: COLORFIT_PLANS[plan].label, limit, used, remaining: Math.max(0, limit - used) };
 }

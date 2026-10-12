@@ -2,31 +2,36 @@
 
 import Link from "next/link";
 import { ChangeEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { api, jsonInit, timeAgo, useMe } from "@/lib/client";
+import { api, jsonInit, notifyMeChanged, timeAgo, useMe } from "@/lib/client";
 import { DYE_BRANDS, FAMILY_LABEL, TARGET_COLORS, TARGET_GROUPS, correctionFamilies, findShade, supportFamilies, type DyeShade, type TargetColor, type ToneFamily } from "@/lib/colorTargets";
-import { LEVEL_CHART, levelColor, levelFromRgb } from "@/lib/levelChart";
+import { isSkinLike, matchTargets, rgbHex } from "@/lib/colorMatch";
+import { GRAY_PERCENTS, LEVEL_CHART, grayHistoryLabel, levelColor, levelFromRgb } from "@/lib/levelChart";
 import { TONER_MIN_SHADE_LEVEL, currentLevelOf, isToneDown, isToning, toneDownShadeLevel } from "@/lib/toning";
 import ColorQna from "./ColorQna";
 
-const histories = ["탈색 1회", "흑염색 이력", "손상모", "새치 30%"];
+const histories = ["탈색 1회", "흑염색 이력", "손상모"];
 const UNDERTONE_LABEL: Record<string, string> = { warm: "웜(잔류 오렌지)", cool: "쿨(애쉬)", neutral: "중성" };
 
 type Analysis = { root: number; mid: number; end: number; undertone: "warm" | "cool" | "neutral" };
 type MixItem = { tube: string; grams: number; owned: boolean };
 type Formula = { mix: MixItem[]; developerPercent: number; ratio: string; timeMinutes: number; order: string; matchScore: number; notes: string[]; guide?: { title: string; steps: string[] } };
 type HistoryRow = { id: string; targetName: string; targetColor: string; formula: Formula; createdAt: string };
+type Usage = { plan: string; planLabel: string; limit: number; used: number; remaining: number };
 
 type WhitePoint = { x: number; y: number };
-type Measured = Analysis & { whiteApplied: boolean; overExposed: boolean };
+// 사진 안의 영역(0~1 비율). x0<x1, y0<y1
+type Box = { x0: number; y0: number; x1: number; y1: number };
+type Measured = Analysis & { whiteApplied: boolean; overExposed: boolean; skinExcluded: boolean };
 
 // 사진 픽셀을 실제로 읽어 뿌리/중간/끝 3구간의 밝기(레벨)와 웜/쿨 언더톤을 계산한다.
 // 조명 영향 줄이기: ① 흰색 기준점을 찍으면 그 색이 흰색이 되도록 채널별로 보정(조명 색·밝기)
-// ② 가장자리 배경을 빼고 가운데 60%만 보고 ③ 반사광(가장 밝은 25%)과 그림자(가장 어두운 10%)를 빼고 평균낸다.
-function analyzeImage(imageUrl: string, white: WhitePoint | null): Promise<Measured> {
+// ② 드래그로 고른 모발 박스만 본다(없으면 가운데 60%). 박스 위쪽부터 뿌리·중간·끝 ③ 얼굴·목 피부색 픽셀을 빼고
+// ④ 반사광(가장 밝은 25%)과 그림자(가장 어두운 10%)를 빼고 평균낸다.
+function analyzeImage(imageUrl: string, white: WhitePoint | null, box: Box | null): Promise<Measured> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
-      const w = 120, h = 180;
+      const w = 240, h = 360;
       const canvas = document.createElement("canvas");
       canvas.width = w;
       canvas.height = h;
@@ -59,13 +64,17 @@ function analyzeImage(imageUrl: string, white: WhitePoint | null): Promise<Measu
         gain = ref.map((v) => Math.min(3, Math.max(0.4, 235 / Math.max(v, 1))));
       }
 
-      const bandHeight = Math.floor(h / 3);
-      let clipped = 0, total = 0;
-      const bands = [0, bandHeight, bandHeight * 2].map((startY, i) => {
-        const endY = i === 2 ? h : startY + bandHeight;
+      const area = box ?? { x0: 0.2, y0: 0, x1: 0.8, y1: 1 };
+      const ax0 = Math.floor(area.x0 * w), ax1 = Math.max(ax0 + 1, Math.ceil(area.x1 * w));
+      const ay0 = Math.floor(area.y0 * h), ay1 = Math.max(ay0 + 3, Math.ceil(area.y1 * h));
+      const bandHeight = Math.floor((ay1 - ay0) / 3);
+      let clipped = 0, total = 0, skinRemoved = 0;
+      const bands = [0, 1, 2].map((i) => {
+        const startY = ay0 + bandHeight * i;
+        const endY = i === 2 ? Math.min(h, ay1) : startY + bandHeight;
         const list: { r: number; g: number; b: number; l: number }[] = [];
         for (let y = startY; y < endY; y++) {
-          for (let x = Math.floor(w * 0.2); x < Math.ceil(w * 0.8); x++) {
+          for (let x = ax0; x < Math.min(w, ax1); x++) {
             const [r0, g0, b0] = px(x, y);
             if (r0 >= 250 || g0 >= 250 || b0 >= 250) clipped++;
             total++;
@@ -73,8 +82,12 @@ function analyzeImage(imageUrl: string, white: WhitePoint | null): Promise<Measu
             list.push({ r, g, b, l: 0.2126 * r + 0.7152 * g + 0.0722 * b });
           }
         }
-        list.sort((p, q) => p.l - q.l);
-        const kept = list.slice(Math.floor(list.length * 0.1), Math.max(Math.floor(list.length * 0.1) + 1, Math.floor(list.length * 0.75)));
+        // 얼굴·목 피부를 뺀다. 피부와 비슷한 모발(핑크 베이지 등)이 대부분이면 다 빠지므로 그때는 빼지 않는다.
+        const hair = list.filter((p) => !isSkinLike(p.r, p.g, p.b));
+        skinRemoved += list.length - hair.length;
+        const use = hair.length >= list.length * 0.3 ? hair : list;
+        use.sort((p, q) => p.l - q.l);
+        const kept = use.slice(Math.floor(use.length * 0.1), Math.max(Math.floor(use.length * 0.1) + 1, Math.floor(use.length * 0.75)));
         const avg = kept.reduce((acc, p) => ({ r: acc.r + p.r, g: acc.g + p.g, b: acc.b + p.b }), { r: 0, g: 0, b: 0 });
         return { r: avg.r / kept.length, g: avg.g / kept.length, b: avg.b / kept.length };
       });
@@ -84,7 +97,7 @@ function analyzeImage(imageUrl: string, white: WhitePoint | null): Promise<Measu
       const avg = { r: (rootBand.r + midBand.r + endBand.r) / 3, g: (rootBand.g + midBand.g + endBand.g) / 3, b: (rootBand.b + midBand.b + endBand.b) / 3 };
       const warmth = (avg.r - avg.b) / 255;
       const undertone = warmth > 0.08 ? "warm" : warmth < -0.02 ? "cool" : "neutral";
-      resolve({ root: toLevel(rootBand), mid: toLevel(midBand), end: toLevel(endBand), undertone, whiteApplied: !!white, overExposed: clipped / total > 0.15 });
+      resolve({ root: toLevel(rootBand), mid: toLevel(midBand), end: toLevel(endBand), undertone, whiteApplied: !!white, overExposed: clipped / total > 0.15, skinExcluded: skinRemoved / total > 0.05 });
     };
     img.onerror = () => reject(new Error("사진을 불러오지 못했어요."));
     img.src = imageUrl;
@@ -132,6 +145,7 @@ function ShadeChips({ shades, selected, onToggle }: { shades: PickerShade[]; sel
 function LevelBar({ selected, markers = [], onSelect }: { selected?: number; markers?: number[]; onSelect?: (level: number) => void }) {
   return (
     <div className="mt-3">
+      <p className="mb-2 text-[10px] text-muted">숫자가 높을수록 밝아요. 사진 참고 근사색이며 1·2는 확장값이에요. 실물 차트로 최종 확인하세요.</p>
       <div className="flex gap-0.5">
         {LEVEL_CHART.map((c) => {
           const cls = `h-8 min-w-0 flex-1 rounded-sm ${selected === c.level ? "ring-2 ring-rose-400 ring-offset-1 ring-offset-surface" : markers.includes(c.level) ? "ring-2 ring-white/80" : ""}`;
@@ -145,6 +159,164 @@ function LevelBar({ selected, markers = [], onSelect }: { selected?: number; mar
       <div className="mt-1 flex gap-0.5 text-center text-[9px] text-muted">
         {LEVEL_CHART.map((c) => <span key={c.level} className={`min-w-0 flex-1 ${selected === c.level ? "font-bold text-rose-300" : ""}`}>{c.level}</span>)}
       </div>
+    </div>
+  );
+}
+
+// 사진 위에서 드래그해 박스를 고른다(마우스·터치 공통). 드래그 중에는 화면이 스크롤되지 않는다.
+// mode="point"면 누른 위치 하나만 돌려준다(흰색 기준 찍기). 박스 모드에서 거의 움직이지 않고 떼면
+// tapBox(비율)가 있으면 그 크기의 박스로, 없으면 무시한다.
+function BoxSelect({ src, alt, box, onBox, mode = "box", onPoint, tapBox, marker, hint }: {
+  src: string;
+  alt: string;
+  box: Box | null;
+  onBox: (box: Box, img: HTMLImageElement) => void;
+  mode?: "box" | "point";
+  onPoint?: (p: WhitePoint) => void;
+  tapBox?: number;
+  marker?: WhitePoint | null;
+  hint?: string | null;
+}) {
+  const [drag, setDrag] = useState<{ sx: number; sy: number; x: number; y: number } | null>(null);
+  const pos = (e: React.PointerEvent<HTMLDivElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    return { x: Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), y: Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)) };
+  };
+  const down = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const p = pos(e);
+    setDrag({ sx: p.x, sy: p.y, x: p.x, y: p.y });
+  };
+  const move = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!drag) return;
+    const p = pos(e);
+    setDrag({ ...drag, x: p.x, y: p.y });
+  };
+  const up = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!drag) return;
+    const p = pos(e);
+    setDrag(null);
+    if (mode === "point") return onPoint?.(p);
+    const img = e.currentTarget.querySelector("img");
+    if (!img) return;
+    let b: Box = { x0: Math.min(drag.sx, p.x), y0: Math.min(drag.sy, p.y), x1: Math.max(drag.sx, p.x), y1: Math.max(drag.sy, p.y) };
+    if (b.x1 - b.x0 < 0.03 && b.y1 - b.y0 < 0.03) {
+      if (!tapBox) return;
+      const half = tapBox / 2;
+      b = { x0: Math.max(0, p.x - half), y0: Math.max(0, p.y - half), x1: Math.min(1, p.x + half), y1: Math.min(1, p.y + half) };
+    }
+    onBox(b, img);
+  };
+  const shown = drag && mode === "box" ? { x0: Math.min(drag.sx, drag.x), y0: Math.min(drag.sy, drag.y), x1: Math.max(drag.sx, drag.x), y1: Math.max(drag.sy, drag.y) } : mode === "box" ? box : null;
+  return (
+    <div className="relative mt-2 flex justify-center overflow-hidden rounded-xl border border-white/10 bg-black/30 p-1">
+      <div onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={() => setDrag(null)} className="relative cursor-crosshair touch-none select-none">
+        <img src={src} alt={alt} draggable={false} className="pointer-events-none block max-h-80 max-w-full" />
+        {shown ? <span className="pointer-events-none absolute border-2 border-rose-400 bg-rose-400/15 shadow-[0_0_0_1px_rgba(0,0,0,0.5)]" style={{ left: `${shown.x0 * 100}%`, top: `${shown.y0 * 100}%`, width: `${(shown.x1 - shown.x0) * 100}%`, height: `${(shown.y1 - shown.y0) * 100}%` }} /> : null}
+        {marker ? <span className="pointer-events-none absolute h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_0_0_2px_rgba(0,0,0,0.6)]" style={{ left: `${marker.x * 100}%`, top: `${marker.y * 100}%` }} /> : null}
+      </div>
+      {hint ? <p className="pointer-events-none absolute left-2 right-2 top-2 rounded-lg bg-black/70 px-3 py-1.5 text-center text-[11px] font-semibold text-white">{hint}</p> : null}
+    </div>
+  );
+}
+
+// 박스 안의 모발 평균색. 피부색 픽셀을 빼고(박스 대부분이 피부색이면 빼지 않음) 반사광(밝은 25%)과 그림자(어두운 15%)도 뺀다.
+function sampleBox(img: HTMLImageElement, box: Box): { r: number; g: number; b: number; skin: boolean } | null {
+  const scale = Math.min(1, 400 / Math.max(img.naturalWidth, img.naturalHeight));
+  const w = Math.max(1, Math.round(img.naturalWidth * scale)), h = Math.max(1, Math.round(img.naturalHeight * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  ctx.drawImage(img, 0, 0, w, h);
+  const x0 = Math.floor(box.x0 * w), y0 = Math.floor(box.y0 * h);
+  const bw = Math.max(1, Math.min(w, Math.ceil(box.x1 * w)) - x0), bh = Math.max(1, Math.min(h, Math.ceil(box.y1 * h)) - y0);
+  let data: Uint8ClampedArray;
+  try {
+    data = ctx.getImageData(x0, y0, bw, bh).data;
+  } catch {
+    return null;
+  }
+  const all: { r: number; g: number; b: number; l: number }[] = [];
+  for (let i = 0; i < data.length; i += 4) all.push({ r: data[i], g: data[i + 1], b: data[i + 2], l: 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2] });
+  const hair = all.filter((p) => !isSkinLike(p.r, p.g, p.b));
+  const list = hair.length >= all.length * 0.3 ? hair : all;
+  list.sort((p, q) => p.l - q.l);
+  const kept = list.slice(Math.floor(list.length * 0.15), Math.max(Math.floor(list.length * 0.15) + 1, Math.floor(list.length * 0.75)));
+  const sum = kept.reduce((a, p) => ({ r: a.r + p.r, g: a.g + p.g, b: a.b + p.b }), { r: 0, g: 0, b: 0 });
+  const r = sum.r / kept.length, g = sum.g / kept.length, b = sum.b / kept.length;
+  return { r, g, b, skin: isSkinLike(r, g, b) };
+}
+
+// 원하는 스타일 사진에서 모발을 눌러 가장 가까운 목표 컬러와 레벨을 고른다.
+function TargetPhotoFinder({ selected, onPick }: { selected: TargetColor; onPick: (target: TargetColor, level: number) => void }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [box, setBox] = useState<Box | null>(null);
+  const [found, setFound] = useState<{ hex: string; level: number; candidates: TargetColor[] } | null>(null);
+  const [error, setError] = useState("");
+
+  const choose = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setUrl(URL.createObjectURL(file));
+    setBox(null);
+    setFound(null);
+    setError("");
+  };
+
+  const select = (b: Box, img: HTMLImageElement) => {
+    setBox(b);
+    const c = sampleBox(img, b);
+    if (!c) return setError("사진을 분석할 수 없어요.");
+    const candidates = matchTargets(c.r, c.g, c.b).map((m) => m.target);
+    const level = levelFromRgb(c.r, c.g, c.b);
+    setFound({ hex: rgbHex(c.r, c.g, c.b), level, candidates });
+    // 피부로 보이면 자동으로 고르지 않는다. 피부와 비슷한 모발일 수도 있어 후보는 보여준다.
+    if (c.skin) return setError("고른 부분이 피부색에 가까워요. 얼굴·목이 아닌 머리카락만 박스로 골라주세요. 피부와 비슷한 모발 색이면 아래 후보에서 직접 골라주세요.");
+    setError("");
+    onPick(candidates[0], level);
+  };
+
+  return (
+    <div className="mt-2">
+      <div className="flex flex-wrap items-center gap-2 text-[11px]">
+        <label className="cursor-pointer rounded-full border border-rose-500/60 px-2.5 py-1 font-semibold text-rose-300 hover:bg-rose-500/10">
+          {url ? "다른 사진으로 찾기" : "사진으로 찾기"}
+          <input type="file" accept="image/*" onChange={choose} className="sr-only" />
+        </label>
+        <label className="cursor-pointer rounded-full border border-rose-500/60 px-2.5 py-1 font-semibold text-rose-300 hover:bg-rose-500/10">
+          카메라로 촬영
+          <input type="file" accept="image/*" capture="environment" onChange={choose} className="sr-only" />
+        </label>
+        {url ? <button type="button" onClick={() => { setUrl(null); setFound(null); setBox(null); }} className="rounded-full border border-border px-2.5 py-1 text-muted hover:text-foreground">사진 닫기</button> : null}
+        {!url ? <span className="text-muted">원하는 스타일 사진에서 색을 찾아요</span> : null}
+      </div>
+      {url ? (
+        <>
+          <BoxSelect src={url} alt="목표 컬러 참고 사진" box={box} onBox={select} tapBox={0.08} hint={found ? null : "원하는 머리색 부분을 손가락으로 드래그해 박스로 골라주세요"} />
+          {found ? (
+            <div className="mt-2 rounded-lg bg-white/5 px-3 py-2 text-[11px]">
+              <div className="flex items-center gap-2">
+                <span className="h-5 w-5 shrink-0 rounded ring-1 ring-white/20" style={{ backgroundColor: found.hex }} />
+                <span className="text-muted">찾은 색 · 약 <b className="text-foreground">{found.level}레벨</b> · 가까운 컬러</span>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {found.candidates.map((c, i) => (
+                  <button key={c.name} type="button" onClick={() => onPick(c, found.level)} className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 ${selected.name === c.name ? "border-rose-500 bg-rose-500/15 font-bold text-rose-300" : "border-border text-muted hover:text-foreground"}`}>
+                    <span className="h-3 w-3 rounded-full" style={{ backgroundColor: c.color }} />
+                    {i + 1}. {c.name}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-2 leading-4 text-muted">SNS 사진은 조명·필터로 실제보다 밝거나 진하게 보일 수 있어요. 박스를 다시 그려 여러 곳을 비교하고, 레벨은 아래 차트에서 맞춰주세요.</p>
+            </div>
+          ) : null}
+          {error ? <p className="mt-1 text-[11px] text-rose-300">{error}</p> : null}
+        </>
+      ) : null}
     </div>
   );
 }
@@ -209,6 +381,7 @@ export default function ColorAiPage() {
   const [selectedColor, setSelectedColor] = useState<TargetColor>(TARGET_COLORS[0]);
   const [targetLevel, setTargetLevel] = useState<number>(TARGET_COLORS[0].level);
   const [selectedHistory, setSelectedHistory] = useState<string[]>([]);
+  const [grayPercent, setGrayPercent] = useState(0);
   const [brandId, setBrandId] = useState(DYE_BRANDS[0].id);
   const [lineId, setLineId] = useState("all");
   const [showAllShades, setShowAllShades] = useState(false);
@@ -222,6 +395,7 @@ export default function ColorAiPage() {
   const [lightOffset, setLightOffset] = useState<number>(readLightOffset);
   const [whitePoint, setWhitePoint] = useState<WhitePoint | null>(null);
   const [pickingWhite, setPickingWhite] = useState(false);
+  const [hairBox, setHairBox] = useState<Box | null>(null);
   // 추천·차트·필터에 쓰는 레벨 = 사진 측정값 + 매장 조명 보정 + 부위별 수동 보정.
   const analysis = useMemo<Analysis | null>(
     () =>
@@ -240,10 +414,15 @@ export default function ColorAiPage() {
   const [formula, setFormula] = useState<Formula | null>(null);
   const [message, setMessage] = useState("");
   const [recent, setRecent] = useState<HistoryRow[]>([]);
+  const [usage, setUsage] = useState<Usage | null>(null);
+  const [extraCost, setExtraCost] = useState(0);
 
   const loadRecent = useCallback(async () => {
-    const r = await api<{ recommendations: HistoryRow[] }>("/api/color-ai");
-    if (r.ok) setRecent(r.data.recommendations);
+    const r = await api<{ recommendations: HistoryRow[]; usage: Usage | null; extraCost: number }>("/api/color-ai");
+    if (!r.ok) return;
+    setRecent(r.data.recommendations);
+    setUsage(r.data.usage);
+    setExtraCost(r.data.extraCost);
   }, []);
 
   useEffect(() => {
@@ -259,17 +438,19 @@ export default function ColorAiPage() {
 
   const selectPhoto = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
+    event.target.value = "";
     if (!file) return;
     setImageUrl(URL.createObjectURL(file));
     setMeasured(null);
     setAdjust([0, 0, 0]);
+    setHairBox(null);
     setWhitePoint(null);
     setPickingWhite(false);
     setFormula(null);
     setMessage("");
   };
 
-  const runAnalysis = async (white: WhitePoint | null = whitePoint) => {
+  const runAnalysis = async (white: WhitePoint | null = whitePoint, box: Box | null = hairBox) => {
     if (!imageUrl) {
       setMessage("먼저 모발 사진을 선택해 주세요.");
       return;
@@ -277,14 +458,16 @@ export default function ColorAiPage() {
     setAnalyzing(true);
     setMessage("");
     try {
-      const result = await analyzeImage(imageUrl, white);
+      const result = await analyzeImage(imageUrl, white, box);
       setMeasured(result);
       setAdjust([0, 0, 0]);
       setFormula(null);
       setMessage(
-        result.overExposed
+        (result.overExposed
           ? "조명이 강해 하얗게 날아간 부분이 많아요. 조명을 줄이거나 흰색 기준을 찍고, 레벨을 −/+로 확인해 주세요."
-          : "모발 분석이 완료되었습니다. 실제와 다르면 레벨을 −/+로 맞춰 주세요.",
+          : "모발 분석이 완료되었습니다. 실제와 다르면 레벨을 −/+로 맞춰 주세요.") +
+          (result.skinExcluded ? " 피부로 보이는 부분은 빼고 계산했어요." : "") +
+          (box ? "" : " 사진에서 모발 부분을 드래그해 박스로 고르면 더 정확해요."),
       );
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "분석에 실패했어요.");
@@ -293,16 +476,13 @@ export default function ColorAiPage() {
     }
   };
 
-  // 흰색 기준 찍기: 사진은 object-contain으로 보여주므로 실제 사진 영역 안의 위치(0~1)로 바꾼다.
-  const pickWhite = (event: React.MouseEvent<HTMLImageElement>) => {
-    const el = event.currentTarget;
-    const rect = el.getBoundingClientRect();
-    const scale = Math.min(rect.width / el.naturalWidth, rect.height / el.naturalHeight);
-    const dw = el.naturalWidth * scale, dh = el.naturalHeight * scale;
-    const x = (event.clientX - rect.left - (rect.width - dw) / 2) / dw;
-    const y = (event.clientY - rect.top - (rect.height - dh) / 2) / dh;
-    if (x < 0 || x > 1 || y < 0 || y > 1) return;
-    const point = { x, y };
+  // 모발 박스를 그리면 바로 그 영역으로 다시 분석한다.
+  const selectHairBox = (box: Box) => {
+    setHairBox(box);
+    runAnalysis(whitePoint, box);
+  };
+
+  const pickWhite = (point: WhitePoint) => {
     setWhitePoint(point);
     setPickingWhite(false);
     runAnalysis(point);
@@ -329,35 +509,49 @@ export default function ColorAiPage() {
     setMessage("조명 보정을 초기화했어요.");
   };
 
-  const createRecommendation = async () => {
+  // 이번 달 횟수를 다 썼으면 서버가 402(needCoins)를 주고, 확인을 받은 뒤 useCoins로 다시 보낸다.
+  const createRecommendation = async (useCoins = false) => {
     if (!analysis) {
       setMessage("먼저 모발 사진을 분석해 주세요.");
       return;
     }
+    if (!me) {
+      setMessage("로그인 후 AI 배합 추천을 받을 수 있어요.");
+      return;
+    }
     setRecommending(true);
     setMessage("");
-    const r = await api<{ id: string; formula: Formula }>(
+    const r = await api<{ id: string; formula: Formula; charged: number; usage: Usage; needCoins?: boolean; cost?: number; coins?: number }>(
       "/api/color-ai",
       jsonInit("POST", {
+        useCoins,
         rootLevel: analysis.root,
         midLevel: analysis.mid,
         endLevel: analysis.end,
         undertone: analysis.undertone,
         targetName: selectedColor.name,
         targetLevel,
-        history: selectedHistory,
+        history: grayPercent ? [...selectedHistory, grayHistoryLabel(grayPercent)] : selectedHistory,
         brandId,
         tubes: selectedTubes,
         thickness,
       }),
     );
     setRecommending(false);
+    if (r.data.needCoins && r.data.cost) {
+      if (window.confirm(`${r.data.error}.
+${r.data.cost.toLocaleString()}코인으로 1회 더 추천받을까요? (보유 ${(r.data.coins ?? 0).toLocaleString()}코인)`)) return createRecommendation(true);
+      setMessage(`${r.data.error}. 다음 달 1일에 다시 채워져요.`);
+      return;
+    }
     if (!r.ok) {
       setMessage(r.data.error || "추천에 실패했어요.");
       return;
     }
     setFormula(r.data.formula);
-    setMessage("현재 밝기와 잔류 색소를 반영해 배합을 추천했습니다.");
+    setUsage(r.data.usage);
+    if (r.data.charged) notifyMeChanged();
+    setMessage(r.data.charged ? `${r.data.charged.toLocaleString()}코인을 사용해 배합을 추천했습니다.` : "현재 밝기와 잔류 색소를 반영해 배합을 추천했습니다.");
     loadRecent();
   };
 
@@ -386,32 +580,42 @@ export default function ColorAiPage() {
               <h2 className="font-bold"><span className="mr-2 text-rose-400">01</span>현재 모발 분석</h2>
               <span className="text-xs text-muted">뿌리부터 끝까지 촬영</span>
             </div>
-            <div className="relative mt-4 flex min-h-56 flex-col items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-black/30 text-center">
-              {imageUrl && pickingWhite ? (
-                <>
-                  <img src={imageUrl} alt="흰색 기준을 찍을 사진" onClick={pickWhite} className="absolute inset-0 z-[2] h-full w-full cursor-crosshair object-contain" />
-                  <p className="pointer-events-none absolute left-2 right-2 top-2 z-[3] rounded-lg bg-black/70 px-3 py-1.5 text-[11px] font-semibold text-white">사진 속 흰 수건·종이·벽을 눌러주세요</p>
-                </>
-              ) : imageUrl ? (
-                <img src={imageUrl} alt="선택한 모발 사진" className="absolute inset-0 h-full w-full object-cover opacity-75" />
-              ) : null}
-              <div className={`relative z-[1] px-5 ${pickingWhite ? "invisible" : ""}`}>
-                <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-rose-500/20 text-2xl">◎</div>
-                <p className="mt-3 font-semibold">{imageUrl ? "사진을 확인하고 분석해 주세요" : "모발 사진을 선택해 주세요"}</p>
-                <p className="mt-1 text-xs leading-5 text-muted">자연광에서 모발 전체가 보이게, 흰 수건이나 종이를 함께 찍으면 조명 보정이 정확해져요.</p>
-                <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                  <label className="cursor-pointer rounded-lg bg-rose-500 px-4 py-2 text-sm font-bold text-white hover:bg-rose-400">
-                    사진 선택
+            {imageUrl ? (
+              <>
+                <BoxSelect
+                  src={imageUrl}
+                  alt="선택한 모발 사진"
+                  box={hairBox}
+                  onBox={selectHairBox}
+                  mode={pickingWhite ? "point" : "box"}
+                  onPoint={pickWhite}
+                  marker={whitePoint}
+                  hint={pickingWhite ? "사진 속 흰 수건·종이·벽을 눌러주세요" : hairBox ? null : "모발 부분만 손가락으로 드래그해 박스로 골라주세요 (위쪽이 뿌리)"}
+                />
+                <div className="mt-2 flex gap-2">
+                  <label className="flex-1 cursor-pointer rounded-lg border border-white/20 px-4 py-2 text-center text-sm font-bold text-foreground">
+                    다른 사진
                     <input type="file" accept="image/*" onChange={selectPhoto} className="sr-only" />
                   </label>
-                  <button type="button" onClick={() => runAnalysis()} disabled={analyzing || !imageUrl} className="rounded-lg border border-white/20 px-4 py-2 text-sm font-bold text-foreground disabled:opacity-50">
-                    {analyzing ? "분석 중..." : analysis ? "다시 분석" : "사진 분석"}
+                  <button type="button" onClick={() => runAnalysis()} disabled={analyzing} className="flex-1 rounded-lg bg-rose-500 px-4 py-2 text-sm font-bold text-white hover:bg-rose-400 disabled:opacity-50">
+                    {analyzing ? "분석 중..." : analysis ? "다시 분석" : hairBox ? "박스 영역 분석" : "사진 분석"}
                   </button>
                 </div>
+              </>
+            ) : (
+              <div className="mt-4 flex min-h-56 flex-col items-center justify-center rounded-xl border border-white/10 bg-black/30 px-5 text-center">
+                <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-rose-500/20 text-2xl">◎</div>
+                <p className="mt-3 font-semibold">모발 사진을 선택해 주세요</p>
+                <p className="mt-1 text-xs leading-5 text-muted">자연광에서 모발 전체가 보이게, 흰 수건이나 종이를 함께 찍으면 조명 보정이 정확해져요. 사진을 고른 뒤 모발 부분을 드래그해 박스로 선택해요.</p>
+                <label className="mt-4 cursor-pointer rounded-lg bg-rose-500 px-4 py-2 text-sm font-bold text-white hover:bg-rose-400">
+                  사진 선택
+                  <input type="file" accept="image/*" onChange={selectPhoto} className="sr-only" />
+                </label>
               </div>
-            </div>
+            )}
             {imageUrl ? (
               <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
+                {hairBox ? <button type="button" onClick={() => { setHairBox(null); runAnalysis(whitePoint, null); }} className="rounded-full border border-border px-2.5 py-1 text-muted hover:text-foreground">박스 지우기</button> : null}
                 <button type="button" onClick={() => setPickingWhite((v) => !v)} className="rounded-full border border-border px-2.5 py-1 font-semibold text-muted hover:text-foreground">
                   {pickingWhite ? "흰색 찍기 취소" : whitePoint ? "흰색 기준 다시 찍기" : "흰색 기준 찍기 (조명 보정)"}
                 </button>
@@ -447,7 +651,7 @@ export default function ColorAiPage() {
                 {lightOffset !== 0 ? <button type="button" onClick={resetLighting} className="rounded-full border border-border px-2.5 py-1 hover:text-foreground">조명 보정 초기화</button> : null}
               </div>
             ) : null}
-            <p className="mt-3 text-[11px] text-muted">명도 차트 (밀본 올디브 레벨 스케일 기준){analysis ? " · 흰 테두리가 현재 모발 레벨" : ""}</p>
+            <p className="mt-3 text-[11px] text-muted">명도 차트 (FIOLE·WELLA 실물 사진 참고){analysis ? " · 흰 테두리가 현재 모발 레벨" : ""}</p>
             <LevelBar markers={analysis ? [analysis.root, analysis.mid, analysis.end] : []} />
             {analysis ? <p className="mt-2 text-center text-[11px] text-muted">언더톤 · {UNDERTONE_LABEL[analysis.undertone]}</p> : null}
           </section>
@@ -463,10 +667,15 @@ export default function ColorAiPage() {
               <div className="mt-2 flex flex-wrap gap-2">
                 {histories.map((history) => <button key={history} type="button" onClick={() => toggle(history, selectedHistory, setSelectedHistory)} className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${selectedHistory.includes(history) ? "border-rose-500 bg-rose-500/15 text-rose-300" : "border-border text-muted hover:text-foreground"}`}>{history}</button>)}
               </div>
+              <div className="mt-3 flex items-center justify-between"><h3 className="text-xs font-bold text-muted">새치</h3><span className="text-xs text-muted">하나만 선택</span></div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {GRAY_PERCENTS.map((p) => <button key={p} type="button" onClick={() => setGrayPercent(grayPercent === p ? 0 : p)} className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${grayPercent === p ? "border-rose-500 bg-rose-500/15 text-rose-300" : "border-border text-muted hover:text-foreground"}`}>{grayHistoryLabel(p)}</button>)}
+              </div>
             </div>
 
             <div className="mt-5">
               <div className="flex items-center justify-between"><h3 className="text-sm font-bold">목표 컬러</h3><span className="text-xs text-muted">{selectedColor.name}</span></div>
+              <TargetPhotoFinder selected={selectedColor} onPick={(color, level) => { setSelectedColor(color); setTargetLevel(level); setFormula(null); }} />
               <div className="mt-2 space-y-2">
                 {TARGET_GROUPS.map((group) => (
                   <div key={group}>
@@ -513,7 +722,14 @@ export default function ColorAiPage() {
               <p className="mt-2 text-[10px] leading-4 text-muted">출처: {[...new Set(visibleLines.map((l) => l.source))].join(" · ")}</p>
             </div>
 
-            <button type="button" onClick={createRecommendation} disabled={recommending} className="mt-6 w-full rounded-xl bg-rose-500 py-3.5 font-bold text-white transition hover:bg-rose-400 disabled:opacity-50">{recommending ? "추천 계산 중..." : "AI 배합 추천 받기"}</button>
+            <button type="button" onClick={() => createRecommendation()} disabled={recommending} className="mt-6 w-full rounded-xl bg-rose-500 py-3.5 font-bold text-white transition hover:bg-rose-400 disabled:opacity-50">{recommending ? "추천 계산 중..." : "AI 배합 추천 받기"}</button>
+            <p className="mt-2 text-center text-[11px] text-muted">
+              {me === null ? <><Link href="/login" className="text-rose-400 underline">로그인</Link>하면 매월 무료로 AI 추천을 받을 수 있어요</> : usage ? (
+                usage.remaining > 0
+                  ? <>{usage.planLabel} 플랜 · 이번 달 <b className="text-foreground">{usage.remaining}회</b> 남음 (월 {usage.limit}회)</>
+                  : <>{usage.planLabel} 플랜 월 {usage.limit}회를 모두 썼어요 · 추가 1회 {extraCost.toLocaleString()}코인</>
+              ) : null}
+            </p>
             {message ? <p className="mt-3 text-center text-xs text-rose-400" role="status">{message}</p> : null}
           </section>
         </div>

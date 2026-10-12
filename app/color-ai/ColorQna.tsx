@@ -17,6 +17,8 @@ type AskResult = { matched: boolean; answer: Answer | null; related: Related[] }
 type Source = { id: string; title: string; author: string; url: string; topics: Related[] };
 
 const SAMPLE_QUESTIONS = [
+  "레벨 차트와 명도 차트는 어떻게 읽나요?",
+  "웰라 차트의 백모 비율과 레벨은 같은 건가요?",
   "칩과 피치가 뭐예요?",
   "하이라이트를 자연스럽게 블랜드하려면?",
   "호일 워크 비율은 어떻게 잡나요?",
@@ -96,7 +98,9 @@ export default function ColorQna() {
         <div className="mt-4 space-y-3">
           {sources.map((s) => (
             <div key={s.id} className="rounded-xl border border-border bg-surface-2 p-3">
-              <a href={s.url} target="_blank" rel="noreferrer" className="text-xs font-bold text-rose-300 underline">{s.title}</a>
+              {s.url
+                ? <a href={s.url} target="_blank" rel="noreferrer" className="text-xs font-bold text-rose-300 underline">{s.title}</a>
+                : <span className="text-xs font-bold text-rose-300">{s.title}</span>}
               <p className="mt-0.5 text-[11px] text-muted">{s.author}</p>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {s.topics.map((t) => (
@@ -138,7 +142,9 @@ export default function ColorQna() {
                 {result.answer.points.map((p, i) => <li key={i}>{p}</li>)}
               </ul>
               <p className="mt-4 border-t border-border pt-3 text-[11px] text-muted">
-                출처: <a href={result.answer.source.url} target="_blank" rel="noreferrer" className="text-rose-300 underline">{result.answer.source.title}</a>
+                출처: {result.answer.source.url
+                  ? <a href={result.answer.source.url} target="_blank" rel="noreferrer" className="text-rose-300 underline">{result.answer.source.title}</a>
+                  : result.answer.source.title}
                 {result.answer.page ? ` · ${result.answer.page}` : ""}
               </p>
             </>

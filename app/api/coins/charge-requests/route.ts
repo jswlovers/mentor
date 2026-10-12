@@ -1,3 +1,4 @@
+import { notifyAdmins } from "@/lib/server/adminAlerts";
 import { db } from "@/lib/server/db";
 import { getUser, limited, unauthorized } from "@/lib/server/http";
 import { COIN_PER_KRW, MIN_CHARGE_KRW } from "@/lib/server/pricing";
@@ -32,5 +33,7 @@ export async function POST(req: Request) {
   if (provider === "manual" && !depositor) return Response.json({ error: "입금자명을 입력해주세요" }, { status: 400 });
   const orderId = `${provider}-${Date.now()}-${user.id}`;
   const info = insertCharge.run(user.id, amountKrw, coins, provider, orderId, depositor);
+  // 토스 결제는 자동 승인되므로 관리자가 확인할 무통장 입금만 알린다.
+  if (provider === "manual") notifyAdmins("충전", `${user.name} · ${amountKrw.toLocaleString()}원 · 입금자 ${depositor}`);
   return Response.json({ id: Number(info.lastInsertRowid), orderId, amountKrw, coins, status: "pending", provider }, { status: 201 });
 }

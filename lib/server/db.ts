@@ -99,7 +99,7 @@ function open() {
       ended_at TEXT
     );
 
-    -- 질문 하나가 곧 채팅방. attachment_type: NULL | 'image' | 'file' | 'call'
+    -- 질문 하나가 곧 채팅방. attachment_type: NULL | 'image' | 'video' | 'file' | 'call'
     CREATE TABLE IF NOT EXISTS messages (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       room_id TEXT NOT NULL,
@@ -146,6 +146,14 @@ function open() {
       room_id TEXT NOT NULL,
       ended_by TEXT NOT NULL,
       ended_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- 비밀번호 찾기 인증번호(인증된 휴대폰으로 발송, 해시로 저장). 10분 유효, 5회 시도 제한.
+    CREATE TABLE IF NOT EXISTS password_resets (
+      user_id TEXT PRIMARY KEY REFERENCES users(id),
+      code_hash TEXT NOT NULL,
+      expires_at INTEGER NOT NULL,
+      attempts INTEGER NOT NULL DEFAULT 0
     );
 
     -- 휴대폰 인증번호(해시로 저장). 5분 유효, 5회 시도 제한.
@@ -295,6 +303,34 @@ try { db.exec(`ALTER TABLE users ADD COLUMN expert_years INTEGER`); } catch {}
 try { db.exec(`ALTER TABLE users ADD COLUMN expert_salon TEXT`); } catch {}
 try { db.exec(`ALTER TABLE users ADD COLUMN expert_license_no TEXT`); } catch {}
 try { db.exec(`ALTER TABLE users ADD COLUMN expert_license_file TEXT`); } catch {}
+// 상담 답변 등급(basic | detail | premium). 등급 도입 전 상담은 모두 5만원(상세)이었다.
+// 잠시 쓰였던 difficulty 컬럼(basic | normal | hard)이 있으면 이름과 값을 옮긴다.
+try { db.exec(`ALTER TABLE consultations RENAME COLUMN difficulty TO tier`); } catch {}
+try { db.exec(`ALTER TABLE consultations ADD COLUMN tier TEXT NOT NULL DEFAULT 'detail'`); } catch {}
+db.exec(`UPDATE consultations SET tier = CASE tier WHEN 'normal' THEN 'detail' WHEN 'hard' THEN 'premium' ELSE tier END WHERE tier IN ('normal', 'hard')`);
+// 관리자가 바꾸는 운영 설정(key → value). 예: commission_pct:basic = 30 (답변 등급별 플랫폼 수수료율 %)
+db.exec(`CREATE TABLE IF NOT EXISTS settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_by TEXT,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+)`);
+// 상담 시작 시점의 수수료율(%)을 고정해 둔다. NULL이면(도입 전 상담) 기본 수수료율로 정산한다.
+try { db.exec(`ALTER TABLE consultations ADD COLUMN commission_pct REAL`); } catch {}
+// 전문가 상담 불가 시간(한국 시간 HH:MM). 둘 다 있으면 매일 그 시간대에는 응대 불가로 본다(자정을 넘길 수 있음).
+try { db.exec(`ALTER TABLE users ADD COLUMN expert_off_start TEXT`); } catch {}
+try { db.exec(`ALTER TABLE users ADD COLUMN expert_off_end TEXT`); } catch {}
+// 회원 프로필 사진(공개, data/uploads 안의 파일명). 전문가는 목록·프로필에 표시된다.
+try { db.exec(`ALTER TABLE users ADD COLUMN photo TEXT`); } catch {}
+// 컬러핏 AI 구독 플랜(pricing.ts COLORFIT_PLANS). 추천 1건마다 월 횟수를 썼는지(0) 코인을 냈는지(코인 수) 기록한다.
+try { db.exec(`ALTER TABLE users ADD COLUMN colorfit_plan TEXT NOT NULL DEFAULT 'free'`); } catch {}
+try { db.exec(`ALTER TABLE color_ai_recommendations ADD COLUMN coins_charged INTEGER NOT NULL DEFAULT 0`); } catch {}
+// 질문자가 "지금 답변 가능한 전문가 찾기"로 여러 명을 골라 상담을 열면, 1차 알림은 이 전문가들(그 순간 ON인 사람)에게만 간다.
+db.exec(`CREATE TABLE IF NOT EXISTS consult_targets (
+  room_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  PRIMARY KEY (room_id, user_id)
+)`);
 // 기존 회원(가입 당시 phone이 없던 계정)은 NULL을 허용하고, 값이 있으면 중복을 막는다.
 db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone ON users(phone) WHERE phone IS NOT NULL`);
 

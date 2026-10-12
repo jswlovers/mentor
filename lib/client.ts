@@ -1,6 +1,8 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 
+export type Availability = { on: boolean; offStart: string | null; offEnd: string | null; offNow: boolean; availableNow: boolean };
+
 export type Me = {
   id: string;
   username: string;
@@ -15,7 +17,15 @@ export type Me = {
   phoneVerified: boolean;
   notifyKakao: boolean;
   position: string | null;
+  /** 전문가만: on = 직접 켠 상태, offNow = 상담 불가 시간이라 쉬는 중 */
+  availability: Availability | null;
+  photoUrl: string | null;
+  /** 전문가 직장명(근무 살롱) */
+  salon: string | null;
+  /** 관리자만: 처리 대기 건수 */
+  adminPending: AdminPending | null;
 };
+export type AdminPending = { charges: number; experts: number; withdrawals: number; tickets: number; total: number };
 
 // 세션 쿠키(HttpOnly)로 인증하므로 fetch가 쿠키를 자동으로 보낸다.
 export async function api<T = unknown>(url: string, init: RequestInit = {}): Promise<{ ok: boolean; status: number; data: T & { error?: string } }> {
@@ -40,9 +50,15 @@ export function useMe() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     refresh();
+    window.addEventListener(ME_CHANGED, refresh);
+    return () => window.removeEventListener(ME_CHANGED, refresh);
   }, [refresh]);
   return { me, refresh };
 }
+
+// useMe는 컴포넌트마다 따로 불러오므로, 내 정보가 바뀌면 이 이벤트로 헤더 등 다른 곳도 다시 불러오게 한다.
+const ME_CHANGED = "mentor:me-changed";
+export const notifyMeChanged = () => window.dispatchEvent(new Event(ME_CHANGED));
 
 export const won = (n: number) => `${n.toLocaleString()}코인`;
 

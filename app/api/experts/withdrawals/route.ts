@@ -1,3 +1,4 @@
+import { notifyAdmins } from "@/lib/server/adminAlerts";
 import { getEarnings, holdWithdrawal, InsufficientCoinsError } from "@/lib/server/coins";
 import { db } from "@/lib/server/db";
 import { forbidden, getUser, limited, unauthorized } from "@/lib/server/http";
@@ -33,5 +34,6 @@ export async function POST(req: Request) {
     }
     throw err;
   }
+  notifyAdmins("출금", `${user.name} · ${amount.toLocaleString()}코인`);
   return Response.json({ ok: true, earnings: getEarnings(user.id) }, { status: 201 });
 }

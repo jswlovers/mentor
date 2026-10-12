@@ -1,3 +1,4 @@
+import { getAdminPending } from "@/lib/server/adminAlerts";
 import { getRecentLedger } from "@/lib/server/coins";
 import { db } from "@/lib/server/db";
 import { forbidden, getAdmin, getUser, unauthorized } from "@/lib/server/http";
@@ -53,5 +54,6 @@ export async function GET(req: Request) {
     users: users.all(),
     ledger: getRecentLedger(),
     coinIssuance: coinIssuance(),
+    pending: getAdminPending(),
   });
 }

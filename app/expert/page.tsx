@@ -1,10 +1,12 @@
 "use client";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, CATEGORIES, jsonInit, useMe } from "@/lib/client";
+import ConsultAvailability from "./ConsultAvailability";
+import Portfolio from "./Portfolio";
 
 type Earn = {
-  earnings: number; share: number; minWithdraw: number;
+  earnings: number; shares: { label: string; pct: number }[]; minWithdraw: number;
   ledger: { id: number; direction: "debit" | "credit"; amount: number; note: string | null; created_at: string }[];
   withdrawals: { id: number; amount: number; bank_info: string; status: string; admin_note: string | null; created_at: string }[];
 };
@@ -23,9 +25,12 @@ export default function Expert() {
   const [bank, setBank] = useState("");
   const [msg, setMsg] = useState("");
   const [cats, setCats] = useState<string[]>([]);
-  const [available, setAvailable] = useState(true);
   const [headline, setHeadline] = useState("");
+  const [myYears, setMyYears] = useState("");
   const [smsg, setSmsg] = useState("");
+  // 첨부한 면허증 사진 미리보기
+  const licensePreview = useMemo(() => (license ? URL.createObjectURL(license) : null), [license]);
+  useEffect(() => () => { if (licensePreview) URL.revokeObjectURL(licensePreview); }, [licensePreview]);
 
   const load = useCallback(async () => {
     const r = await api<Earn>("/api/experts/earnings");
@@ -36,8 +41,8 @@ export default function Expert() {
     if (me?.isExpert) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       load();
-      api<{ categories: string[]; available: boolean; headline: string }>("/api/experts/settings").then((r) => {
-        if (r.ok) { setCats(r.data.categories); setAvailable(r.data.available); setHeadline(r.data.headline); }
+      api<{ categories: string[]; headline: string; years: number | null }>("/api/experts/settings").then((r) => {
+        if (r.ok) { setCats(r.data.categories); setHeadline(r.data.headline); setMyYears(r.data.years == null ? "" : String(r.data.years)); }
       });
     }
   }, [me?.isExpert, load]);
@@ -86,9 +91,22 @@ export default function Expert() {
             <label className="block text-xs font-semibold text-muted">미용사 면허번호 (선택)
               <input maxLength={30} className={`${input} mt-1`} placeholder="면허증에 적힌 번호" value={licenseNo} onChange={(e) => setLicenseNo(e.target.value)} />
             </label>
-            <label className="block text-xs font-semibold text-muted">면허증·자격증 사진 (필수, JPG·PNG·WEBP 5MB 이하)
-              <input required type="file" accept="image/jpeg,image/png,image/webp" className="mt-1 block w-full text-sm text-foreground" onChange={(e) => setLicense(e.target.files?.[0] ?? null)} />
-            </label>
+            <div className="text-xs font-semibold text-muted">면허증·자격증 사진 (필수, JPG·PNG·WEBP 5MB 이하)
+              {/* 기본 파일 선택 버튼은 어두운 화면에서 잘 안 보여서, 입력은 숨기고 눌러서 고르는 업로드 칸을 보여준다 */}
+              <label className={`mt-1 flex cursor-pointer items-center gap-3 rounded-lg border-2 border-dashed p-3 transition hover:border-rose-400 ${license ? "border-emerald-500/50 bg-emerald-500/5" : "border-border bg-surface-2"}`}>
+                <input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only"
+                  onChange={(e) => { const f = e.target.files?.[0] ?? null; if (f && f.size > 5 * 1024 * 1024) { setMsg("면허증 사진은 5MB 이하만 올릴 수 있어요"); e.target.value = ""; return; } setLicense(f); setMsg(""); }} />
+                {licensePreview
+                  // eslint-disable-next-line @next/next/no-img-element
+                  ? <img src={licensePreview} alt="면허증 미리보기" className="h-16 w-16 shrink-0 rounded object-cover" />
+                  : <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded bg-white/5 text-2xl">📷</span>}
+                <span className="min-w-0 flex-1 font-normal">
+                  <span className="block font-semibold text-foreground">{license ? "사진이 첨부됐어요" : "여기를 눌러 면허증·자격증 사진 첨부"}</span>
+                  <span className="block truncate text-muted">{license ? `${license.name} · 눌러서 다른 사진으로 바꾸기` : "휴대폰은 촬영하거나 앨범에서 고를 수 있어요"}</span>
+                </span>
+                <span className="shrink-0 rounded-lg bg-rose-500 px-3 py-1.5 text-xs font-medium text-white">{license ? "변경" : "파일 선택"}</span>
+              </label>
+            </div>
             <textarea required rows={6} maxLength={1000} className={input} placeholder="경력, 자격(미용사 면허 등), 전문 분야를 20자 이상 적어주세요" value={bio} onChange={(e) => setBio(e.target.value)} />
             <button className="w-full rounded-lg bg-rose-500 py-3 font-medium text-white hover:bg-rose-400">전문가 신청</button>
           </form>
@@ -107,29 +125,33 @@ export default function Expert() {
   };
 
   const saveSettings = async () => {
-    const r = await api("/api/experts/settings", jsonInit("POST", { categories: cats, available, headline }));
+    const r = await api("/api/experts/settings", jsonInit("POST", { categories: cats, headline, years: myYears }));
     setSmsg(r.ok ? "저장했어요." : r.data.error || "저장에 실패했어요");
   };
 
   return (
     <div className="mx-auto max-w-xl space-y-5 px-6 py-8">
+      {me.availability && <ConsultAvailability av={me.availability} />}
       <section className="space-y-2 rounded-xl border border-border bg-surface p-4 text-sm">
         <h2 className="font-semibold">상담 호출 설정</h2>
         <p className="text-xs text-muted">질문자가 상담을 열면 담당 분야와 맞는 전문가에게 알림이 가요. 분야를 하나도 고르지 않으면 모든 분야 요청을 받아요. (시간당 최대 3건, 카카오톡은 08~23시에만)</p>
-        <label className="flex items-center gap-2"><input type="checkbox" checked={available} onChange={(e) => setAvailable(e.target.checked)} /> 지금 상담 요청 받기 (끄면 호출·목록에서 &apos;쉬는 중&apos;)</label>
         <div className="flex flex-wrap gap-2">
           {CATEGORIES.map((c) => (
             <button key={c} type="button" onClick={() => setCats((p) => (p.includes(c) ? p.filter((x) => x !== c) : [...p, c]))} className={`rounded-full border px-3 py-1 text-xs transition ${cats.includes(c) ? "border-rose-500 bg-rose-500 text-white" : "border-border text-muted hover:text-foreground"}`}>{c}</button>
           ))}
         </div>
         <input className={input} maxLength={40} placeholder="한 줄 소개 (예: 탈색·염색 손상모 케어 15년)" value={headline} onChange={(e) => setHeadline(e.target.value)} />
+        <label className="flex items-center gap-2 text-xs text-muted">경력
+          <input type="number" min={0} max={60} inputMode="numeric" className={`${input} w-20`} value={myYears} onChange={(e) => setMyYears(e.target.value)} />년 (전문가 찾기·프로필에 표시돼요)
+        </label>
         <button onClick={saveSettings} className="w-full rounded-lg border border-border bg-surface-2 py-2 text-sm font-medium text-foreground hover:border-white/30">저장</button>
         {smsg && <p className="text-xs text-muted">{smsg}</p>}
       </section>
+      <Portfolio />
       <section className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-4">
         <p className="text-xs text-emerald-300">출금 가능 수익 (코인 = 원)</p>
         <p className="text-3xl font-bold">{data ? data.earnings.toLocaleString() : "…"}</p>
-        {data && <p className="mt-1 text-[11px] text-muted">상담에서 질문자가 낸 금액의 {Math.round(data.share * 100)}%가 쌓여요. 최소 출금 {data.minWithdraw.toLocaleString()}코인.</p>}
+        {data && <p className="mt-1 text-[11px] text-muted">상담에서 질문자가 낸 금액 중 {data.shares.map((s) => `${s.label} ${s.pct}%`).join(" · ")}가 쌓여요. 최소 출금 {data.minWithdraw.toLocaleString()}코인.</p>}
       </section>
       <form onSubmit={withdraw} className="space-y-2 rounded-xl border border-border bg-surface p-4">
         <h2 className="text-sm font-semibold">출금 신청</h2>

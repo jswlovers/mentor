@@ -21,7 +21,18 @@ npm run dev                    # 개발 서버 http://localhost:3000
 npm run build
 npm run serve                  # server.mjs --prod, PORT/HTTPS_CERT_PATH/HTTPS_KEY_PATH 사용
 npm run make-admin -- <아이디>  # 가입한 회원을 관리자로 지정
+npm run backup                 # 지금 바로 백업 (서버는 BACKUP_INTERVAL_HOURS마다 자동 백업)
 ```
+
+### 백업·복구
+
+- 서버가 켜져 있으면 `BACKUP_DIR`(기본 `data/backups`)에 DB 스냅샷 `mentor-YYYYMMDD-HHMMSS.sqlite`를 주기적으로 만들고 최근 `BACKUP_KEEP`개만 남깁니다. 업로드 파일은 `files/` 아래로 새 파일만 복사합니다.
+- **같은 디스크의 백업은 디스크 고장에 무력합니다.** `BACKUP_DIR`을 다른 디스크·클라우드 동기화 폴더로 지정하거나 주기적으로 외부로 옮기세요.
+- 복구: 서버 중지 → 백업 파일을 `data/mentor.sqlite`로 복사(기존 `mentor.sqlite-wal`, `-shm` 삭제) → `files/` 아래 폴더를 `data/`로 복사 → 서버 시작.
+
+### 사업자 정보
+
+`.env.local`의 `BUSINESS_*` 값을 채우면 모든 화면 하단에 표시됩니다(전자상거래법 필수 표시). 바꾼 뒤 `npm run build`를 다시 실행하세요.
 
 ## 문서
 
@@ -44,7 +55,7 @@ npm run make-admin -- <아이디>  # 가입한 회원을 관리자로 지정
 통합 테스트는 운영 DB를 오염시키지 않도록 **별도 `DATA_DIR`로 띄운 서버**에서만 실행하세요.
 
 ```bash
-DATA_DIR=/tmp/mentor-test PORT=3005 node server.mjs --prod
+DATA_DIR=/tmp/mentor-test BACKUP_DISABLED=1 PORT=3005 node server.mjs --prod
 DATA_DIR=/tmp/mentor-test node scripts/e2e.mjs http://localhost:3005
 ```
 

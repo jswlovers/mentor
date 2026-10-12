@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useMe, won } from "@/lib/client";
-import { CONSULT_START_FEE, COST_PER_SEC, EXPERT_SHARE } from "@/lib/server/pricing";
+import { AUTO_REFUND_MINUTES, CONSULT_FEE_MAX, CONSULT_FEE_MIN, COST_PER_SEC } from "@/lib/server/pricing";
 
 const STEPS = [
   {
@@ -20,7 +20,7 @@ const STEPS = [
     n: 3,
     title: "급하면 1:1 상담",
     badge: "코인",
-    body: `전문가와 채팅·보이스톡·페이스톡으로 바로 해결해요. 상담 시작비 ${won(CONSULT_START_FEE)}, 전문가가 참여하기 전에는 전액 환불로 취소할 수 있어요.`,
+    body: `전문가와 채팅·보이스톡·페이스톡으로 바로 해결해요. 답변 등급별 상담 시작비 ${won(CONSULT_FEE_MIN)}~${won(CONSULT_FEE_MAX)}, ${AUTO_REFUND_MINUTES}분 안에 전문가가 참여하지 않으면 전액 환불돼요.`,
   },
 ];
 
@@ -76,7 +76,7 @@ export default function Intro() {
           <p className="font-semibold text-neutral-900">전문가로 활동하고 싶다면</p>
           <p className="mt-1">
             로그인 후 <Link href="/expert" className="text-rose-600 underline">전문가 신청</Link>으로 경력을 남기면, 관리자 승인 뒤 상담에 참여할 수 있어요.
-            상담 금액의 {Math.round(EXPERT_SHARE * 100)}%가 수익으로 쌓이고 출금 신청할 수 있어요.
+            상담 금액에서 답변 등급별 수수료를 뺀 금액이 수익으로 쌓이고 출금 신청할 수 있어요.
           </p>
         </div>
       </div>

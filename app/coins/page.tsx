@@ -2,10 +2,11 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { api, jsonInit, useMe } from "@/lib/client";
-import { ATTACHMENT_COST, CONSULT_START_FEE, COST_PER_SEC, MAX_MESSAGE_CHARS, MESSAGE_MIN_COST, MESSAGE_PER_CHAR, MIN_CHARGE_KRW } from "@/lib/server/pricing";
+import { ATTACHMENT_COST, COLORFIT_EXTRA_COST, COLORFIT_PLANS, COST_PER_SEC, MAX_MESSAGE_CHARS, MESSAGE_MIN_COST, MESSAGE_PER_CHAR, MIN_CHARGE_KRW, TIER_KEYS, TIERS } from "@/lib/server/pricing";
 
 type Charge = { id: number; amount_krw: number; coins: number; status: string; provider: string; depositor: string | null; admin_note: string | null; created_at: string };
 declare global { interface Window { TossPayments?: (key: string) => { payment: (o: { customerKey: string }) => { requestPayment: (o: Record<string, unknown>) => Promise<void> } } } }
+type Usage = { plan: string; planLabel: string; limit: number; used: number; remaining: number };
 type Ledger = { id: number; direction: "debit" | "credit"; amount: number; type: string; note: string | null; created_at: string };
 
 const STATUS: Record<string, string> = { pending: "입금 확인 대기", approved: "충전 완료", rejected: "반려" };
@@ -18,12 +19,14 @@ export default function Coins() {
   const [ledger, setLedger] = useState<Ledger[]>([]);
   const [msg, setMsg] = useState("");
   const [depositor, setDepositor] = useState("");
+  const [usage, setUsage] = useState<Usage | null>(null);
   const [info, setInfo] = useState<{ bank: string | null; tossClientKey: string | null }>({ bank: null, tossClientKey: null });
 
   const load = useCallback(async () => {
-    const [c, l] = await Promise.all([api<Charge[]>("/api/coins/charge-requests"), api<Ledger[]>("/api/coins/ledger")]);
+    const [c, l, u] = await Promise.all([api<Charge[]>("/api/coins/charge-requests"), api<Ledger[]>("/api/coins/ledger"), api<{ usage: Usage | null }>("/api/color-ai")]);
     if (c.ok) setCharges(c.data as unknown as Charge[]);
     if (l.ok) setLedger(l.data as unknown as Ledger[]);
+    if (u.ok) setUsage(u.data.usage);
     refresh();
   }, [refresh]);
 
@@ -80,12 +83,37 @@ export default function Coins() {
       </section>
 
       <section className="rounded-xl border border-border bg-surface p-4 text-sm">
+        <div className="flex items-center justify-between">
+          <h2 className="font-semibold">컬러핏 AI 구독</h2>
+          <Link href="/color-ai" className="text-xs text-rose-400 underline">컬러핏 AI 가기</Link>
+        </div>
+        <p className="mt-1 text-xs text-muted">
+          {usage ? <>현재 <b className="text-foreground">{usage.planLabel}</b> 플랜 · 이번 달 AI 배합 추천 <b className="text-foreground">{usage.remaining}회</b> 남음 (월 {usage.limit}회 중 {usage.used}회 사용)</> : "불러오는 중…"}
+        </p>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          {(Object.keys(COLORFIT_PLANS) as (keyof typeof COLORFIT_PLANS)[]).map((k) => {
+            const p = COLORFIT_PLANS[k];
+            const current = usage?.plan === k;
+            return (
+              <div key={k} className={`rounded-lg border p-3 ${current ? "border-rose-500 bg-rose-500/10" : "border-border bg-surface-2"}`}>
+                <p className="flex items-center justify-between text-xs font-semibold">{p.label}{current ? <span className="rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] text-white">이용 중</span> : null}</p>
+                <p className="mt-1 text-base font-bold">{p.price ? `월 ${p.price.toLocaleString()}원` : "0원"}</p>
+                <p className="text-xs text-muted">AI 추천 월 {p.monthly}회{p.price ? ` · 1회 약 ${Math.round(p.price / p.monthly).toLocaleString()}원` : ""}</p>
+              </div>
+            );
+          })}
+        </div>
+        <p className="mt-2 text-xs text-muted">횟수는 매월 1일에 다시 채워져요. 다 쓰면 1회 {won(COLORFIT_EXTRA_COST)}으로 추가 추천을 받을 수 있어요. 유료 플랜 구독 신청은 준비 중이에요.</p>
+      </section>
+
+      <section className="rounded-xl border border-border bg-surface p-4 text-sm">
         <h2 className="mb-2 font-semibold">요금 안내</h2>
         <ul className="space-y-1 text-foreground/80">
-          <li>상담 시작비: <b>{won(CONSULT_START_FEE)}</b> (상담 신청 시 1회)</li>
+          <li>상담 시작비 (상담 신청 시 1회, 답변 등급별): {TIER_KEYS.map((t, i) => <span key={t}>{i > 0 && " · "}{TIERS[t].label} <b>{won(TIERS[t].fee)}</b></span>)}</li>
           <li>쪽지: 글자당 {MESSAGE_PER_CHAR}코인, 최소 {won(MESSAGE_MIN_COST)} (1회 {MAX_MESSAGE_CHARS}자 이내, 사진·파일 +{won(ATTACHMENT_COST)})</li>
           <li>보이스톡: 초당 {COST_PER_SEC.voice}코인 (분당 {(COST_PER_SEC.voice * 60).toLocaleString()})</li>
           <li>페이스톡: 초당 {COST_PER_SEC.video}코인 (분당 {(COST_PER_SEC.video * 60).toLocaleString()})</li>
+          <li>컬러핏 AI: 구독 플랜의 월 횟수를 다 쓰면 추천 1회 {won(COLORFIT_EXTRA_COST)}</li>
         </ul>
         <p className="mt-2 text-xs text-muted">요금은 상담을 신청한 질문자에게만 부과되고, 전문가는 무료로 답변·통화해요. 전문가가 참여하기 전에는 전액 환불로 취소할 수 있어요.</p>
       </section>

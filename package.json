@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "make-admin": "node scripts/make-admin.mjs",
+    "backup": "node scripts/backup.mjs",
     "e2e": "node scripts/e2e.mjs",
     "serve": "node --env-file=.env.local server.mjs --prod"
   },

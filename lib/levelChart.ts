@@ -57,7 +57,7 @@ export function levelFromRgb(r: number, g: number, b: number): number {
   return best.level;
 }
 
-// 새치(백모) 비율 차트. WELLA 차트 왼쪽 백모 비율처럼 칸을 골라 쓴다. 명도 레벨과는 별개 값이다.
+// 새치(백모) 비율 선택지. WELLA 차트 왼쪽 백모 비율 단계를 따른다. 명도 레벨과는 별개 값이다.
 export const GRAY_PERCENTS = [10, 30, 50, 70, 100] as const;
 
 export function grayHistoryLabel(percent: number): string {

@@ -162,34 +162,6 @@ function LevelBar({ selected, markers = [], onSelect }: { selected?: number; mar
   );
 }
 
-// 새치(백모) % 차트. 칸마다 어두운 모발 사이로 흰 모발이 그 비율만큼 섞인 모습을 보여준다. 같은 칸을 다시 누르면 해제.
-function GrayBar({ selected, onSelect, hairLevel = 5 }: { selected: number; onSelect: (percent: number) => void; hairLevel?: number }) {
-  const hair = levelColor(hairLevel);
-  return (
-    <div className="mt-2">
-      <div className="flex gap-1">
-        {GRAY_PERCENTS.map((p) => {
-          const white = (p / 100) * 4;
-          return (
-            <button
-              key={p}
-              type="button"
-              aria-label={`새치 ${p}%`}
-              aria-pressed={selected === p}
-              onClick={() => onSelect(selected === p ? 0 : p)}
-              style={{ backgroundImage: `repeating-linear-gradient(100deg, #e8e6df 0 ${white}px, ${hair} ${white}px 4px)` }}
-              className={`h-8 min-w-0 flex-1 rounded-sm ring-1 ring-white/15 ${selected === p ? "ring-2 ring-rose-400 ring-offset-1 ring-offset-surface" : ""}`}
-            />
-          );
-        })}
-      </div>
-      <div className="mt-1 flex gap-1 text-center text-[10px] text-muted">
-        {GRAY_PERCENTS.map((p) => <span key={p} className={`min-w-0 flex-1 ${selected === p ? "font-bold text-rose-300" : ""}`}>{p}%</span>)}
-      </div>
-    </div>
-  );
-}
-
 // 사진 위에서 드래그해 박스를 고른다(마우스·터치 공통). 드래그 중에는 화면이 스크롤되지 않는다.
 // mode="point"면 누른 위치 하나만 돌려준다(흰색 기준 찍기). 박스 모드에서 거의 움직이지 않고 떼면
 // tapBox(비율)가 있으면 그 크기의 박스로, 없으면 무시한다.
@@ -675,9 +647,10 @@ export default function ColorAiPage() {
               <div className="mt-2 flex flex-wrap gap-2">
                 {histories.map((history) => <button key={history} type="button" onClick={() => toggle(history, selectedHistory, setSelectedHistory)} className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${selectedHistory.includes(history) ? "border-rose-500 bg-rose-500/15 text-rose-300" : "border-border text-muted hover:text-foreground"}`}>{history}</button>)}
               </div>
-              <div className="mt-4 flex items-center justify-between"><h3 className="text-sm font-bold">새치 비율</h3><span className="text-xs text-muted">{grayPercent ? `새치 ${grayPercent}%` : "없음"} · 칸을 눌러 선택</span></div>
-              <GrayBar selected={grayPercent} onSelect={setGrayPercent} hairLevel={analysis ? Math.max(4, analysis.root) : 5} />
-              <p className="mt-1 text-[10px] text-muted">명도 차트와 비교해 흰 모발이 섞인 정도가 가장 비슷한 칸을 골라주세요. 레벨과는 별개 값이에요.</p>
+              <div className="mt-3 flex items-center justify-between"><h3 className="text-xs font-bold text-muted">새치</h3><span className="text-xs text-muted">하나만 선택</span></div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {GRAY_PERCENTS.map((p) => <button key={p} type="button" onClick={() => setGrayPercent(grayPercent === p ? 0 : p)} className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${grayPercent === p ? "border-rose-500 bg-rose-500/15 text-rose-300" : "border-border text-muted hover:text-foreground"}`}>{grayHistoryLabel(p)}</button>)}
+              </div>
             </div>
 
             <div className="mt-5">

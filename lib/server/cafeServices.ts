@@ -1,7 +1,7 @@
 import { db } from "./db";
 import { notify } from "./notify";
 import { type User } from "./http";
-import { CAFE_REGIONS, allowedJobKinds, canHire, jobSide, type JobRights } from "../cafe";
+import { CAFE_REGIONS, EMPTY_RESUME, RESUME_FIELDS, allowedJobKinds, canHire, jobSide, type JobRights, type Resume } from "../cafe";
 import "./cafe";
 import "./salon";
 
@@ -30,6 +30,15 @@ try{db.exec("ALTER TABLE cafe_posts ADD COLUMN views INTEGER NOT NULL DEFAULT 0"
 try{db.exec("ALTER TABLE cafe_comments ADD COLUMN parent_id INTEGER");}catch{}
 try{db.exec("ALTER TABLE cafe_posts ADD COLUMN sponsored_until TEXT");}catch{}
 try{db.exec("ALTER TABLE cafe_ad_requests ADD COLUMN coins INTEGER NOT NULL DEFAULT 0");}catch{}
+// 채용 지원: 저장해 둔 이력서를 제출 시점 그대로 지원서에 보관하고, 면접 날짜는 지원서별 대화로 맞춘다.
+db.exec(`
+ CREATE TABLE IF NOT EXISTS cafe_resumes(user_id TEXT PRIMARY KEY REFERENCES users(id),data TEXT NOT NULL,updated_at TEXT NOT NULL DEFAULT(datetime('now')));
+ CREATE TABLE IF NOT EXISTS cafe_application_messages(id INTEGER PRIMARY KEY AUTOINCREMENT,application_id INTEGER NOT NULL,author_id TEXT NOT NULL,body TEXT NOT NULL,interview_at TEXT,accepted_at TEXT,created_at TEXT NOT NULL DEFAULT(datetime('now')));
+ CREATE INDEX IF NOT EXISTS idx_cafe_application_messages ON cafe_application_messages(application_id,id);
+`);
+try{db.exec("ALTER TABLE cafe_applications ADD COLUMN resume TEXT");}catch{}
+try{db.exec("ALTER TABLE cafe_applications ADD COLUMN interview_at TEXT");}catch{}
+try{db.exec("ALTER TABLE cafe_applications ADD COLUMN viewed_at TEXT");}catch{}
 export function promotionFee(){const row=db.prepare("SELECT value FROM settings WHERE key='cafe_promotion_coins'").get() as {value:string}|undefined;const n=Number(row?.value||0);return Number.isSafeInteger(n)&&n>=0&&n<=1000000?n:0;}
 
 export class CafeServiceError extends Error {
@@ -89,3 +98,40 @@ export function matchScore(skills:string, region:string, details:{tags?:string;r
   return (region&&details.region===region?50:0)+Math.min(50,keywords.filter(k=>(details.tags||"").includes(k)).length*10);
 }
 export function notifyOwner(id:string,body:string,link="/cafe/services/activity") {notify(id,body,link);}
+
+// ── 이력서·채용 지원 ──
+export function getResume(userId:string):Resume|null {
+  const row=db.prepare("SELECT data FROM cafe_resumes WHERE user_id=?").get(userId) as {data:string}|undefined;
+  return row?{...EMPTY_RESUME,...JSON.parse(row.data)}:null;
+}
+export function saveResume(user:User,value:Record<string,unknown>) {
+  const resume={...EMPTY_RESUME};
+  for(const field of RESUME_FIELDS){
+    const text=textField(value[field.key],field.label,field.max,!field.required);
+    must(!text||!field.options||field.options.includes(text),`${field.label}을(를) 다시 선택해주세요`);
+    resume[field.key]=text;
+  }
+  must(/^0\d{1,2}-?\d{3,4}-?\d{4}$/.test(resume.phone),"연락처를 확인해주세요 (예: 010-1234-5678)");
+  const year=new Date().getFullYear();
+  if(resume.birth_year)integer(resume.birth_year,year-80,year-14,"출생연도");
+  integer(resume.career_years,0,60,"총 경력");
+  must(!resume.available_from||/^\d{4}-\d{2}-\d{2}$/.test(resume.available_from),"근무 가능일을 확인해주세요");
+  db.prepare("INSERT INTO cafe_resumes(user_id,data) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET data=excluded.data,updated_at=datetime('now')").run(user.id,JSON.stringify(resume));
+}
+export type JobApplication={id:number;post_id:number;user_id:string;status:string;viewed_at:string|null;interview_at:string|null;author_id:string;title:string;board:string;applicant_name:string;owner_name:string};
+/** 채용 지원서와 당사자(지원자·공고 작성자) 확인. 관리자는 열람만 한다. */
+export function jobApplication(id:unknown,user:User) {
+  const r=db.prepare("SELECT a.id,a.post_id,a.user_id,a.status,a.viewed_at,a.interview_at,p.author_id,p.title,p.board,u.name AS applicant_name,o.name AS owner_name FROM cafe_applications a JOIN cafe_posts p ON p.id=a.post_id JOIN users u ON u.id=a.user_id JOIN users o ON o.id=p.author_id WHERE a.id=?").get(integer(id,1,1e10,"지원 번호")) as JobApplication|undefined;
+  must(r&&r.board==="jobs","지원 내역을 찾을 수 없어요",404);
+  must(r.user_id===user.id||r.author_id===user.id||user.isAdmin,"지원 당사자만 이용할 수 있어요",403);
+  return r;
+}
+export const ACTIVE_APPLICATION=["pending","interview","interview_confirmed"];
+// 면접 일시는 한국 시간 'YYYY-MM-DDTHH:MM'으로 받고, 지금 이후여야 한다.
+export function interviewTime(value:unknown) {
+  const at=String(value??"");
+  must(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(at)&&Number.isFinite(Date.parse(`${at}:00+09:00`)),"면접 날짜와 시간을 확인해주세요");
+  must(Date.parse(`${at}:00+09:00`)>Date.now(),"지난 시간으로는 면접을 잡을 수 없어요");
+  return at;
+}
+export const interviewLabel=(at:string)=>at.replace("T"," ");

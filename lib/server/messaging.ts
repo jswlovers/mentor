@@ -34,6 +34,9 @@ export const TEMPLATES = {
   withdraw_paid: { env: "KAKAO_TEMPLATE_WITHDRAW_PAID", text: (v) => `${v.amount}원 출금이 지급됐어요.` },
   ticket_resolved: { env: "KAKAO_TEMPLATE_TICKET_RESOLVED", text: () => "문의가 처리됐어요. 앱에서 답변을 확인해주세요." },
   // 관리자에게: 새 충전·전문가·출금·문의 요청 도착 (lib/server/adminAlerts.ts)
+  job_resume: { env: "KAKAO_TEMPLATE_JOB_RESUME", text: (v) => `${v.name}님의 이력서가 '${v.title}' 공고에 도착했어요. 라운지 신청 관리에서 확인해주세요.` },
+  job_message: { env: "KAKAO_TEMPLATE_JOB_MESSAGE", text: (v) => `${v.sender}님이 '${v.title}' 면접 대화에 메시지를 보냈어요.`, throttleMinutes: 30 },
+  job_interview: { env: "KAKAO_TEMPLATE_JOB_INTERVIEW", text: (v) => `'${v.title}' 면접이 ${v.at}로 확정됐어요. 꼭 참석해주세요.` },
   admin_alert: { env: "KAKAO_TEMPLATE_ADMIN_ALERT", text: (v) => `새 ${v.what} 요청이 들어왔어요. (${v.detail}) 관리자 페이지에서 확인해주세요.`, throttleMinutes: 5 },
   // 관리자 안내(서비스 공지·결제 안내). 자유 문구라 템플릿은 #{message} 변수 하나로 등록한다.
   admin_notice: { env: "KAKAO_TEMPLATE_ADMIN_NOTICE", text: (v) => v.message },

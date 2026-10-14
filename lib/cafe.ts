@@ -116,3 +116,22 @@ export type CafeComment = {
     created_at: string;
     parent_id?:number|null;
 };
+// 구직자 이력서: 한 번 저장해 두고 채용공고에 그대로 제출한다(제출 시점의 내용을 지원서에 보관).
+export type Resume = { name: string; phone: string; birth_year: string; desired_role: string; desired_region: string; desired_pay: string; career_years: string; license: string; careers: string; skills: string; available_from: string; intro: string };
+export const LICENSE_OPTIONS = ["보유", "취득 예정", "미보유"] as const;
+export type ResumeField = { key: keyof Resume; label: string; type: "text" | "tel" | "number" | "date" | "textarea" | "select"; options?: readonly string[]; required?: boolean; max: number; placeholder?: string };
+export const RESUME_FIELDS: ResumeField[] = [
+    { key: "name", label: "이름", type: "text", required: true, max: 30 },
+    { key: "phone", label: "연락처", type: "tel", required: true, max: 13, placeholder: "010-1234-5678" },
+    { key: "birth_year", label: "출생연도", type: "number", max: 4, placeholder: "예: 1998" },
+    { key: "desired_role", label: "희망 직급", type: "select", options: JOB_ROLES, required: true, max: 20 },
+    { key: "desired_region", label: "희망 지역", type: "select", options: CAFE_REGIONS, max: 20 },
+    { key: "desired_pay", label: "희망 급여", type: "text", max: 100, placeholder: "예: 월 280만원 이상 / 협의" },
+    { key: "career_years", label: "총 경력 (년)", type: "number", required: true, max: 2 },
+    { key: "license", label: "미용사 면허", type: "select", options: LICENSE_OPTIONS, required: true, max: 10 },
+    { key: "careers", label: "경력 사항", type: "textarea", max: 2000, placeholder: "한 줄에 하나씩: 매장명 / 근무 기간 / 직급·담당" },
+    { key: "skills", label: "전문 분야", type: "text", max: 200, placeholder: "예: 커트, 염색, 펌, 클리닉" },
+    { key: "available_from", label: "근무 가능일", type: "date", max: 10 },
+    { key: "intro", label: "자기소개", type: "textarea", required: true, max: 2000, placeholder: "일하는 스타일, 강점, 매장에 바라는 점" },
+];
+export const EMPTY_RESUME: Resume = { name: "", phone: "", birth_year: "", desired_role: "", desired_region: "", desired_pay: "", career_years: "", license: "", careers: "", skills: "", available_from: "", intro: "" };

@@ -29,7 +29,7 @@ export default function ServiceHub({section}:{section:typeof CAFE_SERVICES[numbe
   {error&&<p role="alert" className="text-sm text-rose-300">{error}<button onClick={load} className="ml-3 underline">다시 시도</button></p>}{notice&&<p role="status" className="rounded-xl bg-emerald-500/10 p-3 text-sm text-emerald-300">{notice}</p>}
   {!publicPage&&!me?<p className={card}>{me===undefined?'회원 확인 중…':<><Link href="/login" className="text-rose-400 underline">로그인</Link> 후 이용해주세요.</>}</p>:<>
    {['members','resumes','market'].includes(section)&&<div className="flex flex-wrap gap-3"><input aria-label="검색" placeholder={section==='market'?'상품명 검색':'이름·분야 검색'} value={q} onChange={e=>setQ(e.target.value)} className={`${input} flex-1`}/>{section==='market'?<select aria-label="상품 분류" value={category} onChange={e=>setCategory(e.target.value)} className={input+' sm:w-auto'}><option value="">전체 상품</option>{data?.categories?.map(c=><option key={c}>{c}</option>)}</select>:<select aria-label="지역 검색" value={region} onChange={e=>setRegion(e.target.value)} className={input+' sm:w-auto'}><option value="">전체 지역</option>{CAFE_REGIONS.map(r=><option key={r}>{r}</option>)}</select>}</div>}
-   {data?(isMarket?<MarketPanels section={section} data={data} me={me||null} run={run} busy={busy}/>:<MemberPanels section={section} data={data} me={me||null} run={run} busy={busy} thread={thread} setThread={setThread}/>):!error&&<p className="text-sm text-muted">불러오는 중…</p>}
+   {data?(isMarket?<MarketPanels section={section} data={data} me={me||null} run={run} busy={busy}/>:<MemberPanels section={section} data={data} me={me||null} run={run} busy={busy} thread={thread} setThread={setThread} reload={load}/>):!error&&<p className="text-sm text-muted">불러오는 중…</p>}
   </>}
  </div>;
 }

@@ -2,7 +2,8 @@ import { db } from "@/lib/server/db";
 import { getUser, limited, unauthorized } from "@/lib/server/http";
 import { cafeJson, cafeError } from "@/lib/server/cafe";
 import { canHire, findCafeBoard, jobSide } from "@/lib/cafe";
-import { CafeServiceError, boardAccess, ensureProfile, isSeekPost, jobRights, getServicePost, integer, matchScore, must, notifyOwner, profile, promotionFee, saveProfile, textField, transaction } from "@/lib/server/cafeServices";
+import { notify } from "@/lib/server/notify";
+import { ACTIVE_APPLICATION, CafeServiceError, boardAccess, ensureProfile, getResume, interviewLabel, interviewTime, isSeekPost, jobApplication, jobRights, getServicePost, saveResume, integer, matchScore, must, notifyOwner, profile, promotionFee, saveProfile, textField, transaction } from "@/lib/server/cafeServices";
 import { debitCoins,refundFromRevenue,InsufficientCoinsError } from '@/lib/server/coins';
 
 export async function GET(req:Request) {
@@ -29,7 +30,14 @@ export async function GET(req:Request) {
    const rows=db.prepare("SELECT id,title,details FROM cafe_posts WHERE board='jobs' AND status='open' AND deleted_at IS NULL ORDER BY id DESC LIMIT 200").all() as {id:number;title:string;details:string}[];
    return cafeJson({items:rows.filter(r=>jobSide(JSON.parse(r.details).kind)==="hire").map(r=>({...r,details:JSON.parse(r.details),score:matchScore(p.skills,p.region,JSON.parse(r.details))})).sort((a,b)=>b.score-a.score).slice(0,30)});
   }
-  if(area==="applications")return cafeJson({items:db.prepare(`SELECT a.*,p.title,p.author_id AS owner_id,p.board,u.name AS applicant_name FROM cafe_applications a JOIN cafe_posts p ON p.id=a.post_id JOIN users u ON u.id=a.user_id WHERE a.user_id=? OR p.author_id=? ORDER BY a.id DESC LIMIT 200`).all(user.id,user.id)});
+  if(area==="resume")return cafeJson({resume:getResume(user.id),name:user.name});
+  if(area==="applications")return cafeJson({items:(db.prepare(`SELECT a.*,p.title,p.author_id AS owner_id,p.board,u.name AS applicant_name,
+    (SELECT COUNT(*) FROM cafe_application_messages m WHERE m.application_id=a.id) AS message_count
+    FROM cafe_applications a JOIN cafe_posts p ON p.id=a.post_id JOIN users u ON u.id=a.user_id WHERE a.user_id=? OR p.author_id=? ORDER BY a.id DESC LIMIT 200`).all(user.id,user.id) as {resume:string|null}[]).map(a=>({...a,resume:a.resume?JSON.parse(a.resume):null}))});
+  if(area==="application-chat") {
+   const a=jobApplication(sp.get("id"),user);
+   return cafeJson({application:a,items:db.prepare("SELECT m.*,u.name AS author_name FROM cafe_application_messages m JOIN users u ON u.id=m.author_id WHERE m.application_id=? ORDER BY m.id LIMIT 500").all(a.id)});
+  }
   if(area==="inbox") {
    const id=Number(sp.get("id"));
    if(id){const thread=db.prepare("SELECT * FROM cafe_threads WHERE id=? AND (sender_id=? OR owner_id=?)").get(id,user.id,user.id);must(thread,"문의를 찾을 수 없어요",404);return cafeJson({thread,items:db.prepare("SELECT m.*,u.name AS author_name FROM cafe_thread_messages m JOIN users u ON u.id=m.author_id WHERE thread_id=? ORDER BY m.id LIMIT 500").all(id)});}
@@ -49,6 +57,7 @@ export async function POST(req:Request) {
  try {
   const value=await req.json();must(value&&typeof value==='object',"요청 내용을 확인해주세요");
   if(value.action==="profile")saveProfile(user,value);
+  else if(value.action==="resume")saveResume(user,value);
   else if(value.action==="grade-request") {
    ensureProfile(user.id);must(!db.prepare("SELECT 1 FROM cafe_grade_requests WHERE user_id=? AND status='pending'").get(user.id),"등업 심사 중인 요청이 있어요",409);
    db.prepare("INSERT INTO cafe_grade_requests(user_id,reason) VALUES(?,?)").run(user.id,textField(value.reason,"신청 사유"));
@@ -64,17 +73,47 @@ export async function POST(req:Request) {
     const details=JSON.parse(post.details);const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul'}).format(new Date());must(!details.deadline||details.deadline>=today,"신청 기간이 끝났어요",409);
     const existing=db.prepare("SELECT id,status FROM cafe_applications WHERE post_id=? AND user_id=?").get(post.id,user.id) as {id:number;status:string}|undefined;
     must(!existing||existing.status==='cancelled',"이미 신청한 모집이에요",409);
-    if(existing)db.prepare("UPDATE cafe_applications SET status='pending',message=? WHERE id=?").run(textField(value.message,"신청 내용",2000),existing.id);
-    else db.prepare("INSERT INTO cafe_applications(post_id,user_id,message) VALUES(?,?,?)").run(post.id,user.id,textField(value.message,"신청 내용",2000));
-    notifyOwner(post.author_id,`${user.name}님이 ‘${post.title}’에 신청했어요`);
+    const isJob=post.board==="jobs";
+    const resume=isJob?getResume(user.id):null;
+    must(!isJob||resume,"이력서를 먼저 작성해주세요. 라운지 › 내 이력서에서 저장할 수 있어요");
+    const message=textField(value.message,isJob?"전하는 말":"신청 내용",2000,isJob);const snapshot=resume?JSON.stringify(resume):null;
+    if(existing){db.prepare("UPDATE cafe_applications SET status='pending',message=?,resume=?,interview_at=NULL,viewed_at=NULL WHERE id=?").run(message,snapshot,existing.id);db.prepare("DELETE FROM cafe_application_messages WHERE application_id=?").run(existing.id);}
+    else db.prepare("INSERT INTO cafe_applications(post_id,user_id,message,resume) VALUES(?,?,?,?)").run(post.id,user.id,message,snapshot);
+    if(isJob)notify(post.author_id,`${user.name}님의 이력서가 도착했어요 · ‘${post.title}’`,"/cafe/services/activity",{kind:"job_resume",vars:{name:user.name,title:post.title}});
+    else notifyOwner(post.author_id,`${user.name}님이 ‘${post.title}’에 신청했어요`);
    });
   } else if(value.action==="application-status") {
    transaction(()=>{const r=db.prepare("SELECT a.*,p.author_id,p.details,p.status AS post_status FROM cafe_applications a JOIN cafe_posts p ON p.id=a.post_id WHERE a.id=?").get(integer(value.id,1,1e10,"신청 번호")) as {id:number;user_id:string;author_id:string;details:string;status:string;post_id:number;post_status:string}|undefined;must(r,"신청 내역이 없어요",404);
     const status=String(value.status);must(['accepted','rejected','cancelled'].includes(status),"처리 상태를 확인해주세요");
     if(status==='cancelled')must(r.user_id===user.id,"신청자만 취소할 수 있어요",403);else must(r.author_id===user.id,"모집 작성자만 처리할 수 있어요",403);
-    must(['pending','accepted'].includes(r.status),"이미 처리된 신청이에요",409);
-    if(status==='accepted'){must(r.status==='pending'&&r.post_status==='open',"승인할 수 없는 신청이에요",409);const cap=Number(JSON.parse(r.details).capacity||0);const used=(db.prepare("SELECT COUNT(*) AS n FROM cafe_applications WHERE post_id=? AND status='accepted'").get(r.post_id) as {n:number}).n;must(!cap||used<cap,"모집 정원이 찼어요",409);}
+    must([...ACTIVE_APPLICATION,'accepted'].includes(r.status),"이미 처리된 신청이에요",409);
+    if(status==='accepted'){must(ACTIVE_APPLICATION.includes(r.status)&&r.post_status==='open',"승인할 수 없는 신청이에요",409);const cap=Number(JSON.parse(r.details).capacity||0);const used=(db.prepare("SELECT COUNT(*) AS n FROM cafe_applications WHERE post_id=? AND status='accepted'").get(r.post_id) as {n:number}).n;must(!cap||used<cap,"모집 정원이 찼어요",409);}
     db.prepare("UPDATE cafe_applications SET status=? WHERE id=?").run(status,r.id);notifyOwner(status==='cancelled'?r.author_id:r.user_id,"모집 신청 상태가 변경됐어요");
+   });
+  } else if(value.action==="resume-viewed") {
+   const a=jobApplication(value.id,user);must(a.author_id===user.id,"공고 작성자만 확인할 수 있어요",403);
+   if(!a.viewed_at){db.prepare("UPDATE cafe_applications SET viewed_at=datetime('now') WHERE id=?").run(a.id);notifyOwner(a.user_id,`‘${a.title}’ 매장에서 내 이력서를 확인했어요`);}
+  } else if(value.action==="application-message") {
+   transaction(()=>{
+    const a=jobApplication(value.id,user);must(a.user_id===user.id||a.author_id===user.id,"지원 당사자만 대화할 수 있어요",403);must(ACTIVE_APPLICATION.includes(a.status),"진행 중인 지원에서만 대화할 수 있어요",409);
+    const at=value.interview_at?interviewTime(value.interview_at):null;
+    const body=textField(value.body,"메시지",1000,!!at)||"이 날짜에 면접 어떠세요?";
+    db.prepare("INSERT INTO cafe_application_messages(application_id,author_id,body,interview_at) VALUES(?,?,?,?)").run(a.id,user.id,body,at);
+    if(at&&a.status==="pending")db.prepare("UPDATE cafe_applications SET status='interview' WHERE id=?").run(a.id);
+    const other=a.user_id===user.id?a.author_id:a.user_id;
+    notify(other,at?`${user.name}님이 면접 날짜를 제안했어요: ${interviewLabel(at)} · ‘${a.title}’`:`${user.name}님의 새 메시지 · ‘${a.title}’`,"/cafe/services/activity",{kind:"job_message",vars:{sender:user.name,title:a.title}});
+   });
+  } else if(value.action==="interview-accept") {
+   transaction(()=>{
+    const m=db.prepare("SELECT * FROM cafe_application_messages WHERE id=?").get(integer(value.messageId,1,1e10,"제안 번호")) as {id:number;application_id:number;author_id:string;interview_at:string|null;accepted_at:string|null}|undefined;
+    must(m&&m.interview_at,"면접 날짜 제안을 찾을 수 없어요",404);
+    const a=jobApplication(m.application_id,user);must(a.user_id===user.id||a.author_id===user.id,"지원 당사자만 확정할 수 있어요",403);
+    must(m.author_id!==user.id,"상대방이 제안한 날짜만 수락할 수 있어요",403);must(!m.accepted_at,"이미 확정한 날짜예요",409);must(ACTIVE_APPLICATION.includes(a.status),"진행 중인 지원이 아니에요",409);
+    interviewTime(m.interview_at);
+    db.prepare("UPDATE cafe_application_messages SET accepted_at=datetime('now') WHERE id=?").run(m.id);
+    db.prepare("UPDATE cafe_applications SET status='interview_confirmed',interview_at=? WHERE id=?").run(m.interview_at,a.id);
+    db.prepare("INSERT INTO cafe_application_messages(application_id,author_id,body) VALUES(?,?,?)").run(a.id,user.id,`✅ 면접 확정: ${interviewLabel(m.interview_at)}`);
+    for(const id of [a.user_id,a.author_id])notify(id,`면접 확정 ${interviewLabel(m.interview_at)} · ‘${a.title}’`,"/cafe/services/activity",{kind:"job_interview",vars:{title:a.title,at:interviewLabel(m.interview_at)}});
    });
   } else if(value.action==="inquiry") {
    const post=getServicePost(integer(value.postId,1,1e10,"글 번호"));must(boardAccess(post.board,user),"이용 권한이 없어요",403);must(post.board!=='anonymous',"익명 게시판에서는 문의할 수 없어요");must(post.author_id!==user.id,"본인 글에는 문의할 수 없어요");must(!isSeekPost(post)||canHire(jobRights(user)),"구직자에게는 채용 권한이 있는 회원(인증된 원장·디자이너)만 연락할 수 있어요",403);

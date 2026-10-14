@@ -3,11 +3,14 @@ import path from 'node:path';
 import { db } from '@/lib/server/db';
 import { getUser,unauthorized,forbidden,limited } from '@/lib/server/http';
 import { cafeUploads,cafeError,cafeJson } from '@/lib/server/cafe';
-import { boardAccess } from '@/lib/server/cafeServices';
+import { boardAccess, isSeekPost, jobRights } from '@/lib/server/cafeServices';
+import { canHire } from '@/lib/cafe';
 export async function GET(req:Request,{params}:{params:Promise<{id:string}>}){
  const {id}=await params;
- const row=db.prepare('SELECT a.*,p.board,p.deleted_at FROM cafe_attachments a JOIN cafe_posts p ON p.id=a.post_id WHERE a.id=?').get(Number(id)||0) as {filename:string;name:string;mime:string;board:string;deleted_at:string|null}|undefined;
- if(!row||row.deleted_at||!boardAccess(row.board,getUser(req)))return new Response(null,{status:404});
+ const row=db.prepare('SELECT a.*,p.board,p.deleted_at,p.author_id,p.details FROM cafe_attachments a JOIN cafe_posts p ON p.id=a.post_id WHERE a.id=?').get(Number(id)||0) as {filename:string;name:string;mime:string;board:string;deleted_at:string|null;author_id:string;details:string}|undefined;
+ const user=getUser(req);
+ if(!row||row.deleted_at||!boardAccess(row.board,user))return new Response(null,{status:404});
+ if(isSeekPost(row)&&user?.id!==row.author_id&&!canHire(jobRights(user)))return new Response(null,{status:404});
  const file=path.join(cafeUploads(),row.filename);if(!fs.existsSync(file))return new Response(null,{status:404});
  return new Response(new Uint8Array(fs.readFileSync(file)),{headers:{'Content-Type':row.mime,'Content-Disposition':`${row.mime.startsWith('video/')?'inline':'attachment'}; filename*=UTF-8''${encodeURIComponent(row.name)}`,'X-Content-Type-Options':'nosniff','Cache-Control':'private, no-store'}});
 }

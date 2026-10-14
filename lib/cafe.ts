@@ -14,13 +14,13 @@ export const CAFE_BOARDS = [
     { slug: "model", name: "헤어모델", description: "시술·교육·촬영 모델 모집", group: "모집·거래", listing: true },
     { slug: "volunteer", name: "미용봉사", description: "봉사 참여자 모집과 활동 공유", group: "모집·거래", listing: true },
     { slug: "event", name: "이벤트·나눔", description: "미용인 행사와 나눔 소식", group: "모집·거래", listing: true },
-    { slug: "notice", name: "공지사항", description: "미용카페 운영 안내", group: "소통", listing: false },
+    { slug: "notice", name: "공지사항", description: "라운지 운영 안내", group: "소통", listing: false },
     { slug: "anonymous", name: "익명 고민", description: "닉네임을 공개하지 않고 나누는 이야기", group: "소통", listing: false },
     { slug: "question", name: "미용 질문·답변", description: "기술 질문과 동료의 해결 경험", group: "기술·교육", listing: false },
     { slug: "poll", name: "미용 설문", description: "동료들의 의견을 모아요", group: "소통", listing: false },
     { slug: "humor", name: "좋은글·유머", description: "동료들과 웃고 쉬어가는 공간", group: "소통", listing: false },
     { slug: "congrats", name: "축하해주세요", description: "기쁜 소식을 나눠요", group: "소통", listing: false },
-    { slug: "suggestion", name: "운영진 건의", description: "카페 운영에 관한 제안", group: "소통", listing: false },
+    { slug: "suggestion", name: "운영진 건의", description: "라운지 운영에 관한 제안", group: "소통", listing: false },
     { slug: "cut", name: "커트 교육", description: "커트 자료와 시술 노하우", group: "기술·교육", listing: false },
     { slug: "perm", name: "펌·아이롱펌", description: "펌 시술과 복구 노하우", group: "기술·교육", listing: false },
     { slug: "color", name: "염색·탈색", description: "염색 레시피와 컬러 교육", group: "기술·교육", listing: false },
@@ -59,10 +59,34 @@ export type CafeDetails = {
     fee: string;
     deadline: string;
     tags: string;
+    salon: string;
+    role: string;
+    hours: string;
+    career: string;
 };
-export const EMPTY_CAFE_DETAILS: CafeDetails = { region: "", place: "", date: "", price: "", kind: "", url: "", product: "", formula: "", deposit: "", rent: "", area: "", capacity: "", fee: "", deadline: "", tags: "" };
-export const CAFE_DETAIL_LABELS: Record<keyof CafeDetails, string> = { region: "지역", place: "장소·상세 지역", date: "일정", price: "금액·급여·참가비", kind: "유형", url: "참고 링크", product: "사용 제품", formula: "배합·시술 조건", deposit: "보증금", rent: "월세", area: "면적", capacity: "모집 정원", fee: "참가비 (원)", deadline: "신청 마감일", tags: "분야·태그" };
+export const EMPTY_CAFE_DETAILS: CafeDetails = { region: "", place: "", date: "", price: "", kind: "", url: "", product: "", formula: "", deposit: "", rent: "", area: "", capacity: "", fee: "", deadline: "", tags: "", salon: "", role: "", hours: "", career: "" };
+export const CAFE_DETAIL_LABELS: Record<keyof CafeDetails, string> = { region: "지역", place: "장소·상세 지역", date: "일정", price: "금액·급여·참가비", kind: "유형", url: "참고 링크", product: "사용 제품", formula: "배합·시술 조건", deposit: "보증금", rent: "월세", area: "면적", capacity: "모집 정원", fee: "참가비 (원)", deadline: "신청 마감일", tags: "분야·태그", salon: "매장명", role: "직급", hours: "근무 시간", career: "경력" };
 export const CAFE_KINDS: Partial<Record<CafeBoard, string[]>> = { materials: ["미용재료", "미용도구", "미용도서", "지역 재료상"], jobs: ["정규 채용", "정규 구직", "알바·스페어 채용", "알바·스페어 구직"], used: ["팝니다", "삽니다", "무료나눔"], education: ["교육", "세미나", "스터디", "정모"], model: ["모델 모집", "모델 지원"], volunteer: ["봉사 모집", "봉사 지원", "봉사 후기"], "salon-sale": ["매장 양도", "매장 인수"], event: ["이벤트", "무료나눔"] };
+// 채용·구직 글: 직급과 인증(매장 등록 또는 라운지 등업)에 따라 쓸 수 있는 유형과 입력 항목이 달라진다.
+export type JobSide = "hire" | "seek";
+export const jobSide = (kind: string): JobSide | null => kind.endsWith("채용") ? "hire" : kind.endsWith("구직") ? "seek" : null;
+export const JOB_ROLES = ["디자이너", "인턴", "점장·원장급", "무관"] as const;
+export const JOB_FIELDS: Record<JobSide, (keyof CafeDetails)[]> = { hire: ["region", "place", "salon", "role", "price", "hours", "deadline", "capacity", "tags"], seek: ["region", "role", "career", "price", "hours", "tags"] };
+export const JOB_REQUIRED: Record<JobSide, (keyof CafeDetails)[]> = { hire: ["salon", "role", "price"], seek: ["role", "career"] };
+const JOB_LABELS: Record<JobSide, Partial<Record<keyof CafeDetails, string>>> = {
+    hire: { region: "근무 지역", place: "상세 위치", role: "모집 직급", price: "급여", hours: "근무 시간", capacity: "모집 인원" },
+    seek: { region: "희망 지역", role: "희망 직급", price: "희망 급여", hours: "희망 근무 시간" },
+};
+export const detailLabel = (key: keyof CafeDetails, kind = "") => { const side = jobSide(kind); return (side && JOB_LABELS[side][key]) || CAFE_DETAIL_LABELS[key]; };
+export type JobRights = { position: string | null; verified: boolean; isAdmin: boolean };
+/** 정규 채용은 인증된 원장, 알바·스페어 채용은 인증된 원장·디자이너, 구직은 누구나 쓸 수 있다. */
+export function allowedJobKinds(r: JobRights) {
+    const kinds = CAFE_KINDS.jobs!;
+    if (r.isAdmin) return kinds;
+    return kinds.filter(kind => kind === "정규 채용" ? r.verified && r.position === "원장" : kind === "알바·스페어 채용" ? r.verified && (r.position === "원장" || r.position === "디자이너") : true);
+}
+export const canHire = (r: JobRights) => allowedJobKinds(r).some(kind => jobSide(kind) === "hire");
+export const JOB_RULE_TEXT = "정규 채용은 인증된 원장, 알바·스페어 채용은 인증된 원장·디자이너만 쓸 수 있어요. 인증은 매장 등록(원장·디자이너로 소속) 또는 라운지 등업으로 받아요. 구직 글은 누구나 쓸 수 있고, 본문은 채용 권한이 있는 회원에게만 보여요.";
 export type CafePost = {
     id: number;
     board: CafeBoard;
@@ -82,6 +106,7 @@ export type CafePost = {
     saved: boolean;
     views?: number;
     attachments?: {id:number;name:string;mime:string;url:string}[];
+    masked?: boolean;
 };
 export type CafeComment = {
     id: number;

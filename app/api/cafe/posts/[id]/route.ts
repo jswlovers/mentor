@@ -1,7 +1,7 @@
 import { db } from "@/lib/server/db";
 import { getUser, unauthorized, forbidden } from "@/lib/server/http";
 import { cafeError, cafeJson, getCafePost, validId, validateCafePost } from "@/lib/server/cafe";
-import { boardAccess, safePost } from "@/lib/server/cafeServices";
+import { boardAccess, checkJobKind, safePost } from "@/lib/server/cafeServices";
 type Context = { params: Promise<{ id: string }> };
 export async function GET(req: Request, ctx: Context) {
   const { id } = await ctx.params;
@@ -34,6 +34,7 @@ export async function PATCH(req: Request, ctx: Context) {
   } else {
     let next;
     try { next = validateCafePost({ ...value, board: post.board }); } catch (e) { return cafeError((e as Error).message); }
+    if (next.board === "jobs" && next.details.kind !== post.details.kind) { try { checkJobKind(user, next.details.kind); } catch (e) { return forbidden((e as Error).message); } }
     db.prepare("UPDATE cafe_posts SET title=?,body=?,details=?,updated_at=datetime('now') WHERE id=?").run(next.title,next.body,JSON.stringify(next.details),post.id);
   }
   return cafeJson({ ok: true });

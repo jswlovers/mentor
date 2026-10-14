@@ -27,6 +27,9 @@ async function request(url,method="GET",body,token="") {
   return {status:res.status,data:await res.json().catch(()=>null)};
 }
 const author=client("author"), other=client("other"), admin=client("admin");
+// 채용 글을 쓰려면 인증된 원장·디자이너여야 한다: 작성자를 등업(1)된 디자이너로 둔다.
+db.prepare("UPDATE users SET position=? WHERE id=?").run("디자이너",author.id);
+db.prepare("INSERT INTO cafe_profiles(user_id,grade) VALUES(?,1) ON CONFLICT(user_id) DO UPDATE SET grade=1").run(author.id);
 // DB와 실행 서버가 같은지 반드시 먼저 검증한다. 다르면 여기서 중단한다.
 assert.equal((await author.request("/api/auth/me")).data.user.id,author.id,"Server DATA_DIR mismatch");
 let checks=0;
@@ -53,7 +56,7 @@ const imageUrl=(await request(`/api/cafe/posts/${imageId}`)).data.post.photos[0]
 check("공개 사진 조회",(await fetch(base+imageUrl)).status===200);
 const many=postForm();for(let i=0;i<4;i++)many.append("photos",new Blob([png],{type:"image/png"}),`${i}.png`);
 check("사진 4장 거절",(await author.request("/api/cafe/posts","POST",many)).status===400);
-const definitions=[['talk',{}],['intro',{}],['recipe',{product:"테스트 제품",formula:"배합 조건"}],['education',{region:"서울",kind:"세미나",date:"2026-10-20",price:"무료"}],['review',{}],['business',{}],['news',{}],['materials',{region:"온라인",kind:"미용도서"}],['jobs',{region:"부산",kind:"알바·스페어 채용",price:"일급 13만원"}],['used',{region:"경기",kind:"팝니다",price:"5만원"}],['salon-sale',{region:"서울",kind:"매장 양도",deposit:"1000만원",rent:"100만원",area:"20평"}],['model',{region:"인천",kind:"모델 모집"}],['volunteer',{region:"대구",kind:"봉사 지원"}],['event',{region:"온라인",kind:"무료나눔"}]];
+const definitions=[['talk',{}],['intro',{}],['recipe',{product:"테스트 제품",formula:"배합 조건"}],['education',{region:"서울",kind:"세미나",date:"2026-10-20",price:"무료"}],['review',{}],['business',{}],['news',{}],['materials',{region:"온라인",kind:"미용도서"}],['jobs',{region:"부산",kind:"알바·스페어 채용",price:"일급 13만원",salon:"테스트 미용실",role:"디자이너"}],['used',{region:"경기",kind:"팝니다",price:"5만원"}],['salon-sale',{region:"서울",kind:"매장 양도",deposit:"1000만원",rent:"100만원",area:"20평"}],['model',{region:"인천",kind:"모델 모집"}],['volunteer',{region:"대구",kind:"봉사 지원"}],['event',{region:"온라인",kind:"무료나눔"}]];
 const ids={};for(const [board,details] of definitions){ids[board]=await create(board,details,`검증 ${board}`);check(`${board} 게시판 등록`,!!ids[board]);}
 check("게시판·검색 필터",(await request("/api/cafe/posts?board=recipe&q=검증")).data.items.every(p=>p.board==="recipe"));
 check("지역 필터",(await request("/api/cafe/posts?region=부산")).data.items[0].id===ids.jobs);
@@ -76,7 +79,7 @@ check("다른 회원 댓글 삭제 차단",(await author.request(target+"/action
 check("작성자 댓글 삭제",(await other.request(target+"/actions","POST",{action:"delete-comment",commentId:comment.id})).status===200);
 check("댓글 수 갱신",(await request(target)).data.post.comment_count===0);
 check("신고 접수",(await other.request(target+"/actions","POST",{action:"report",reason:"검토가 필요한 테스트 신고입니다"})).status===200);
-check("신고 관리자 티켓 생성",!!db.prepare("SELECT 1 FROM support_tickets WHERE user_id=? AND subject=?").get(other.id,`미용카페 글 #${ids.talk} 신고`));
+check("신고 관리자 티켓 생성",!!db.prepare("SELECT 1 FROM support_tickets WHERE user_id=? AND subject=?").get(other.id,`라운지 글 #${ids.talk} 신고`));
 check("신고 중복 차단",(await other.request(target+"/actions","POST",{action:"report",reason:"검토가 필요한 테스트 신고입니다"})).status===409);
 check("글 수정",(await author.request(target,"PATCH",{title:"수정된 제목",body:"수정된 경험",details:{}})).status===200);
 check("수정 반영",(await request(target)).data.post.title==="수정된 제목");

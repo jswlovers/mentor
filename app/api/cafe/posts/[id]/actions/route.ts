@@ -38,7 +38,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     try {
       const result = db.prepare("INSERT OR IGNORE INTO cafe_reports(post_id,user_id,reason) VALUES(?,?,?)").run(post.id,user.id,reason);
       if (!result.changes) { db.exec("ROLLBACK"); return cafeError("이미 신고한 글이에요",409); }
-      db.prepare("INSERT INTO support_tickets(user_id,category,subject,body) VALUES(?,'other',?,?)").run(user.id,`미용카페 글 #${post.id} 신고`,`글 #${post.id}: ${post.title}\n/cafe/posts/${post.id}\n사유: ${reason}`);
+      db.prepare("INSERT INTO support_tickets(user_id,category,subject,body) VALUES(?,'other',?,?)").run(user.id,`라운지 글 #${post.id} 신고`,`글 #${post.id}: ${post.title}\n/cafe/posts/${post.id}\n사유: ${reason}`);
       db.exec("COMMIT");
     } catch { db.exec("ROLLBACK"); return cafeError("신고 접수에 실패했어요",500); }
   } else return cafeError("지원하지 않는 요청이에요");

@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { api, jsonInit, timeAgo, useMe } from "@/lib/client";
-import { CAFE_DETAIL_LABELS, findCafeBoard, type CafePost, type CafeComment, type CafeDetails } from "@/lib/cafe";
+import { detailLabel, findCafeBoard, type CafePost, type CafeComment, type CafeDetails } from "@/lib/cafe";
 import CafeEditor from "../../CafeEditor";
 import PostServices from "../../PostServices";
 const button = "rounded-xl border border-border px-4 py-2 text-sm transition hover:border-rose-400/40 disabled:opacity-40";
@@ -56,13 +56,13 @@ export default function CafePostPage() {
         setBusy(false);
     } };
     if (loadError && !data)
-        return <div className="p-8"><p role="alert" className="text-rose-300">{loadError}</p><button onClick={load} className="mt-4 mr-4 underline">다시 시도</button><Link href="/cafe" className="text-rose-400 underline">카페로 돌아가기</Link></div>;
+        return <div className="p-8"><p role="alert" className="text-rose-300">{loadError}</p><button onClick={load} className="mt-4 mr-4 underline">다시 시도</button><Link href="/cafe" className="text-rose-400 underline">라운지로 돌아가기</Link></div>;
     if (!data)
         return <p className="p-8 text-muted">글을 불러오는 중…</p>;
     const { post, comments } = data;
     const board = findCafeBoard(post.board);
     const canEdit = me && (me.id === post.author_id || me.isAdmin);
-    return <div className="space-y-5 px-6 py-8 md:px-10"><Link href="/cafe#feed" className="text-sm text-rose-400">← 미용카페 게시판</Link>
+    return <div className="space-y-5 px-6 py-8 md:px-10"><Link href="/cafe#feed" className="text-sm text-rose-400">← 라운지 게시판</Link>
     {editing ? <><h1 className="text-2xl font-bold">글 수정</h1><CafeEditor post={post} onSaved={() => { setEditing(false); load(); }}/></> : <>
       <article className="rounded-2xl border border-border bg-surface p-5 md:p-8">
         <div className="flex gap-2 text-xs text-rose-300"><span>{board?.name}</span>{!!post.pinned && <span>· 상단 고정</span>}{(board?.listing || post.board === "poll") && <span className={post.status === "closed" ? "text-muted" : "text-emerald-300"}>· {post.status === "closed" ? "마감" : "진행 중"}</span>}</div>
@@ -70,8 +70,8 @@ export default function CafePostPage() {
         {Object.entries(post.details).some(([key,value]) => key !== "url" && Boolean(value)) && <dl className="mt-5 grid gap-3 rounded-xl bg-surface-2 p-4 text-sm sm:grid-cols-2">{(Object.entries(post.details) as [
             keyof CafeDetails,
             string
-        ][]).filter(([key, v]) => key !== "url" && v).map(([key, value]) => <div key={key} className={key === "formula" || key === "url" ? "sm:col-span-2" : ""}><dt className="text-xs text-muted">{CAFE_DETAIL_LABELS[key]}</dt><dd className="mt-1 whitespace-pre-wrap break-words">{value}</dd></div>)}</dl>}
-        <p className="mt-6 whitespace-pre-wrap break-words text-sm leading-7">{post.body}</p><div className="mt-5 space-y-3">{post.photos.map((url, i) => <a key={url} href={url} target="_blank" rel="noopener noreferrer" aria-label={`첨부 사진 ${i + 1} 원본 보기 (새 탭)`}><Image unoptimized width={1000} height={1000} src={url} alt={`${post.title} 첨부 사진 ${i + 1}`} className="mb-3 max-h-[650px] w-full rounded-xl object-contain"/></a>)}</div>
+        ][]).filter(([key, v]) => key !== "url" && v).map(([key, value]) => <div key={key} className={key === "formula" || key === "url" ? "sm:col-span-2" : ""}><dt className="text-xs text-muted">{detailLabel(key, post.details.kind)}</dt><dd className="mt-1 whitespace-pre-wrap break-words">{value}</dd></div>)}</dl>}
+        <p className={`mt-6 whitespace-pre-wrap break-words text-sm leading-7 ${post.masked ? "rounded-xl border border-dashed border-border p-4 text-muted" : ""}`}>{post.body}</p><div className="mt-5 space-y-3">{post.photos.map((url, i) => <a key={url} href={url} target="_blank" rel="noopener noreferrer" aria-label={`첨부 사진 ${i + 1} 원본 보기 (새 탭)`}><Image unoptimized width={1000} height={1000} src={url} alt={`${post.title} 첨부 사진 ${i + 1}`} className="mb-3 max-h-[650px] w-full rounded-xl object-contain"/></a>)}</div>
         <div className="mt-6 flex flex-wrap gap-2"><button disabled={!me || busy} aria-pressed={post.liked} onClick={() => mutate("POST", { action: "like", enabled: !post.liked })} className={`${button} ${post.liked ? "text-rose-300" : ""}`}>♡ 추천 {post.like_count}</button><button disabled={!me || busy} aria-pressed={post.saved} onClick={() => mutate("POST", { action: "save", enabled: !post.saved })} className={`${button} ${post.saved ? "text-rose-300" : ""}`}>{post.saved ? "★ 저장됨" : "☆ 글 저장"}</button>{me && me.id !== post.author_id && <button onClick={() => setReporting(!reporting)} className={button}>신고</button>}</div>
         {!me && <p className="mt-3 text-xs text-muted"><Link href="/login" className="text-rose-400 underline">로그인</Link>하면 댓글·추천·저장을 이용할 수 있어요.</p>}
         {canEdit && <div className="mt-5 flex flex-wrap gap-2 border-t border-border pt-4"><button onClick={() => setEditing(true)} disabled={busy} className={button}>수정</button>{board?.listing && <button disabled={busy} onClick={() => mutate("PATCH", { action: "status", status: post.status === "open" ? "closed" : "open" }, "")} className={button}>{post.status === "open" ? "마감하기" : "다시 열기"}</button>}{me?.isAdmin && <button disabled={busy} onClick={() => mutate("PATCH", { action: "pin", pinned: !post.pinned }, "")} className={button}>{post.pinned ? "고정 해제" : "상단 고정"}</button>}<button onClick={() => setDeleting(true)} disabled={busy} className={`${button} text-rose-300`}>삭제</button></div>}

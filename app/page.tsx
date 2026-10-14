@@ -10,10 +10,10 @@ const PAGE = 20;
 type Row = { id: string; asker_name: string; category: string; title: string; status: string; created_at: string; answer_count: number; consult_status: string | null };
 
 const ACTIONS = [
-  { href: "/ask", icon: "✎", label: "질문하기", sub: "무료로 물어보기" },
+  { href: "/experts", icon: "☆", label: "전문가 찾기", sub: "분야별 검색·상담" },
   { href: "/color-ai", icon: "◎", label: "컬러핏 AI", sub: "염색 배합 진단" },
-  { href: "/experts", icon: "☆", label: "전문가 찾기", sub: "분야별 검색" },
-  { href: "/cafe", icon: "☕", label: "미용카페", sub: "소통·구인구직" },
+  { href: "/cafe", icon: "☕", label: "라운지", sub: "질문·소통·구인구직" },
+  { href: "/salon", icon: "✂", label: "내 매장", sub: "직원·일정·공지" },
 ] as const;
 
 export default function Home() {

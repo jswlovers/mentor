@@ -51,7 +51,6 @@ export default function Header() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Link href="/" className="text-lg font-bold tracking-tight text-rose-400">미용 SOS</Link>
         <div className="flex max-w-full flex-wrap items-center justify-end gap-2 text-sm">
-          <Link href="/cafe" aria-current={pathname.startsWith("/cafe") ? "page" : undefined} className="shrink-0 rounded-full border border-border px-3 py-1.5 text-rose-300 transition hover:border-rose-400/50">미용카페</Link>
           {me ? (
             <>
               {av && (
@@ -64,22 +63,25 @@ export default function Header() {
                 🔔{me.unread > 0 && <span className="absolute -right-1 -top-1 min-w-[18px] rounded-full bg-rose-500 px-1 text-center text-[11px] leading-[18px] text-white">{me.unread > 99 ? "99+" : me.unread}</span>}
               </Link>
               <Link href="/coins" className="rounded-full border border-border px-3 py-1.5 text-foreground/80 transition hover:border-white/25">{me.coins.toLocaleString()}코인</Link>
-              <Link href="/ask" className="rounded-full bg-rose-500 px-3 py-1.5 font-medium text-white transition hover:bg-rose-400">질문하기</Link>
             </>
           ) : me === null ? (
+            <>
+            <Link href="/cafe" className="shrink-0 rounded-full border border-border px-3 py-1.5 text-rose-300 transition hover:border-rose-400/50">라운지</Link>
             <Link href="/login" className="rounded-full bg-rose-500 px-3 py-1.5 font-medium text-white transition hover:bg-rose-400">로그인</Link>
+            </>
           ) : null}
         </div>
       </div>
       {me && (
         <nav className="mt-3 flex gap-4 overflow-x-auto text-xs text-muted">
           <Link href="/account" className="flex shrink-0 items-center gap-1.5 font-semibold text-foreground"><Avatar name={me.name} url={me.photoUrl} size={18} />{me.name}님</Link>
-          <Link href="/ask" className="shrink-0 font-semibold text-foreground transition hover:text-rose-300">질문하기</Link>
+          {/* 주요 메뉴 순서: 전문가 찾기 → 컬러핏 AI → 라운지 → 내 매장. 질문하기는 라운지 안의 질문·상담으로 들어간다. */}
+          <Link href="/experts" className="shrink-0 font-semibold text-foreground transition hover:text-rose-300">전문가 찾기</Link>
           <Link href="/color-ai" className="shrink-0 font-semibold text-rose-400 transition hover:text-rose-300">컬러핏 AI</Link>
-          <Link href="/experts" className="shrink-0 transition hover:text-foreground">전문가 찾기</Link>
+          <Link href="/cafe" aria-current={pathname.startsWith("/cafe") ? "page" : undefined} className="shrink-0 font-semibold text-foreground transition hover:text-rose-300">라운지</Link>
+          <Link href="/salon" className="shrink-0 font-semibold text-foreground transition hover:text-rose-300">내 매장</Link>
           <Link href="/expert" className="shrink-0 transition hover:text-foreground">{me.isExpert ? "전문가 센터" : "전문가 신청"}</Link>
           <Link href="/support" className="shrink-0 transition hover:text-foreground">고객센터</Link>
-          <Link href="/salon" className="shrink-0 font-semibold text-foreground transition hover:text-rose-300">내 매장</Link>
           {me.isAdmin && (
             <Link href="/admin" className="flex shrink-0 items-center gap-1 transition hover:text-foreground" title={pending ? `처리 대기 ${pending}건` : undefined}>
               관리자{pending > 0 && <span className="min-w-[18px] rounded-full bg-rose-500 px-1 text-center text-[11px] leading-[18px] text-white">{pending > 99 ? "99+" : pending}</span>}

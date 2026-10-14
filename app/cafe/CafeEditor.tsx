@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api, jsonInit, useMe } from "@/lib/client";
-import { CAFE_BOARDS, CAFE_REGIONS, CAFE_KINDS, CAFE_DETAIL_LABELS, EMPTY_CAFE_DETAILS, findCafeBoard, type CafeDetails, type CafePost } from "@/lib/cafe";
+import { CAFE_BOARDS, CAFE_REGIONS, CAFE_KINDS, EMPTY_CAFE_DETAILS, JOB_FIELDS, JOB_REQUIRED, JOB_ROLES, JOB_RULE_TEXT, allowedJobKinds, canHire, detailLabel, findCafeBoard, jobSide, type CafeDetails, type CafePost, type JobRights } from "@/lib/cafe";
 const input = "mt-1 w-full rounded-xl border border-border bg-surface-2 px-3 py-2.5 text-sm text-foreground";
 export default function CafeEditor({ initialBoard = "talk", post, onSaved }: {
     initialBoard?: string;
@@ -22,10 +22,20 @@ export default function CafeEditor({ initialBoard = "talk", post, onSaved }: {
         return () => urls.forEach(url => URL.revokeObjectURL(url));
     }, [files]);
     const [pollOptions,setPollOptions]=useState("");
+    const [rights, setRights] = useState<JobRights | null>(null);
+    useEffect(() => {
+        if (board !== "jobs" || !me) return;
+        let active = true;
+        api<JobRights>("/api/cafe/services?area=job-rights").then(r => { if (active && r.ok) setRights(r.data); }).catch(() => {});
+        return () => { active = false; };
+    }, [board, me]);
     const selected = findCafeBoard(board)!;
-    const kinds = CAFE_KINDS[board];
+    // 채용·구직 게시판은 직급·인증에 따라 고를 수 있는 유형이 다르다(수정 중인 글의 기존 유형은 유지).
+    const jobKinds = rights ? allowedJobKinds(rights).filter(k => k !== post?.details.kind).concat(post?.details.kind ? [post.details.kind] : []) : [];
+    const kinds = board === "jobs" ? jobKinds : CAFE_KINDS[board];
+    const side = board === "jobs" ? jobSide(details.kind) : null;
     const update = (key: keyof CafeDetails, value: string) => setDetails(d => ({ ...d, [key]: value }));
-    const fields: (keyof CafeDetails)[] = selected.listing ? ["region", "place", "date", "deadline", "capacity", "fee", "price", "tags", ...(board === "salon-sale" ? ["deposit", "rent", "area"] as const : [])] : board === "recipe" ? ["product", "formula"] : ["tags"];
+    const fields: (keyof CafeDetails)[] = board === "jobs" ? (side ? JOB_FIELDS[side] : []) : selected.listing ? ["region", "place", "date", "deadline", "capacity", "fee", "price", "tags", ...(board === "salon-sale" ? ["deposit", "rent", "area"] as const : [])] : board === "recipe" ? ["product", "formula"] : ["tags"];
     const submit = async (e: React.FormEvent) => { e.preventDefault(); setBusy(true); setError(""); try {
         if (post) {
             const r = await api(`/api/cafe/posts/${post.id}`, jsonInit("PATCH", { title, body, details }));
@@ -68,11 +78,12 @@ export default function CafeEditor({ initialBoard = "talk", post, onSaved }: {
     if (board === "notice" && !me.isAdmin)
         return <div className="p-8 text-muted">공지사항은 관리자만 작성할 수 있어요. <Link href="/cafe/write" className="text-rose-300 underline">다른 게시판에 글쓰기</Link></div>;
     return <form onSubmit={submit} className="space-y-5 rounded-2xl border border-border bg-surface p-5 md:p-7">
-    <label className="block text-sm font-semibold">게시판<select disabled={!!post} value={board} onChange={e => { setBoard(e.target.value as typeof board); setDetails({ ...EMPTY_CAFE_DETAILS }); }} className={input}>{CAFE_BOARDS.filter(b => b.slug !== "notice" || me.isAdmin).map(b => <option key={b.slug} value={b.slug}>{b.name}</option>)}</select></label><p className="text-xs text-muted">{selected.description}</p>
+    <label className="block text-sm font-semibold">게시판<select disabled={!!post} value={board} onChange={e => { setBoard(e.target.value as typeof board); setDetails({ ...EMPTY_CAFE_DETAILS }); }} className={input}>{CAFE_BOARDS.filter(b => b.slug !== "notice" || me.isAdmin).map(b => <option key={b.slug} value={b.slug}>{b.name}</option>)}</select></label><p className="text-xs text-muted">{selected.description}{board === "question" && <> · 검증된 전문가의 답변이나 1:1 상담이 필요하면 <Link href="/ask" className="text-rose-300 underline">전문가에게 질문하기</Link></>}</p>
     <label className="block text-sm font-semibold">제목<input required maxLength={100} value={title} onChange={e => setTitle(e.target.value)} className={input}/></label>
     {board === "poll" && !post && <label className="block text-sm font-semibold">설문 선택지 (한 줄에 하나, 2~8개)<textarea required rows={5} value={pollOptions} onChange={e=>setPollOptions(e.target.value)} className={input}/></label>}
-    {kinds && <label className="block text-sm font-semibold">유형<select required value={details.kind} onChange={e => update("kind", e.target.value)} className={input}><option value="">선택해주세요</option>{kinds.map(kind => <option key={kind}>{kind}</option>)}</select></label>}
-    <div className="grid gap-4 sm:grid-cols-2">{fields.map(key => <label key={key} className={`block text-sm font-semibold ${key === "formula" || key === "url" ? "sm:col-span-2" : ""}`}>{CAFE_DETAIL_LABELS[key]}{key === "region" ? <select required value={details.region} onChange={e => update(key, e.target.value)} className={input}><option value="">지역 선택</option>{CAFE_REGIONS.map(r => <option key={r}>{r}</option>)}</select> : key === "formula" ? <textarea rows={3} maxLength={500} value={details[key]} onChange={e => update(key, e.target.value)} className={input} placeholder="배합비, 방치 시간, 모발 상태 등을 적어주세요"/> : <input type={(key === "date" || key === "deadline") ? "date" : key === "url" ? "url" : "text"} maxLength={key === "url" ? 1000 : 150} value={details[key]} onChange={e => update(key, e.target.value)} className={input} placeholder={key === "price" ? "예: 일급 13만원 / 참가비 무료 / 5만원" : key === "url" ? "https://… (교육 영상·신청 페이지 등)" : ""}/>}</label>)}</div>
+    {kinds && <label className="block text-sm font-semibold">유형<select required value={details.kind} onChange={e => { const kind = e.target.value; setDetails(d => board === "jobs" && jobSide(kind) !== jobSide(d.kind) ? { ...EMPTY_CAFE_DETAILS, region: d.region, kind } : { ...d, kind }); }} className={input}><option value="">선택해주세요</option>{kinds.map(kind => <option key={kind}>{kind}</option>)}</select></label>}
+    {board === "jobs" && <p className="text-xs leading-5 text-muted">{JOB_RULE_TEXT}{rights && !canHire(rights) && <> 지금은 구직 글만 쓸 수 있어요. <Link href="/cafe/services/profile" className="text-rose-300 underline">등업 신청</Link> · <Link href="/salon" className="text-rose-300 underline">매장 등록</Link></>}</p>}
+    <div className="grid gap-4 sm:grid-cols-2">{fields.map(key => <label key={key} className={`block text-sm font-semibold ${key === "formula" || key === "url" ? "sm:col-span-2" : ""}`}>{detailLabel(key, details.kind)}{side && JOB_REQUIRED[side].includes(key) ? " *" : ""}{key === "role" ? <select required value={details.role} onChange={e => update(key, e.target.value)} className={input}><option value="">직급 선택</option>{JOB_ROLES.map(r => <option key={r}>{r}</option>)}</select> : key === "region" ? <select required value={details.region} onChange={e => update(key, e.target.value)} className={input}><option value="">지역 선택</option>{CAFE_REGIONS.map(r => <option key={r}>{r}</option>)}</select> : key === "formula" ? <textarea rows={3} maxLength={500} value={details[key]} onChange={e => update(key, e.target.value)} className={input} placeholder="배합비, 방치 시간, 모발 상태 등을 적어주세요"/> : <input type={(key === "date" || key === "deadline") ? "date" : key === "url" ? "url" : "text"} maxLength={key === "url" ? 1000 : 150} value={details[key]} onChange={e => update(key, e.target.value)} className={input} required={!!side && JOB_REQUIRED[side].includes(key)} placeholder={key === "price" ? (side === "hire" ? "예: 월 300만원 + 인센티브 / 일급 13만원" : side === "seek" ? "예: 월 280만원 이상 / 협의" : "예: 일급 13만원 / 참가비 무료 / 5만원") : key === "hours" ? "예: 주 5일 10:00~20:00 / 주말만" : key === "career" ? "예: 디자이너 5년, 염색 전문" : key === "salon" ? "예: 미용SOS 강남점" : key === "url" ? "https://… (교육 영상·신청 페이지 등)" : ""}/>}</label>)}</div>
     <label className="block text-sm font-semibold">내용<textarea required rows={10} maxLength={6000} value={body} onChange={e => setBody(e.target.value)} className={input} placeholder="경험, 시술 순서 또는 모집·거래 조건을 자세히 적어주세요."/><span className="mt-1 block text-right text-xs font-normal text-muted">{body.length.toLocaleString()} / 6,000</span></label>
     {!post && <div><label className="block text-sm font-semibold">사진 첨부 (최대 3장)<input type="file" multiple accept="image/jpeg,image/png,image/webp" onChange={e => { const next = Array.from(e.target.files || []); if (next.length > 3 || next.some(f => f.size > 5 * 1024 * 1024)) {
         setError("사진은 최대 3장, 한 장에 5MB 이하로 선택해주세요");

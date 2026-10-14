@@ -1,8 +1,9 @@
 import { db } from "./db";
 import { notify } from "./notify";
 import { type User } from "./http";
-import { CAFE_REGIONS } from "../cafe";
+import { CAFE_REGIONS, allowedJobKinds, canHire, jobSide, type JobRights } from "../cafe";
 import "./cafe";
+import "./salon";
 
 db.exec(`
  CREATE TABLE IF NOT EXISTS cafe_profiles(user_id TEXT PRIMARY KEY REFERENCES users(id),bio TEXT NOT NULL DEFAULT '',region TEXT NOT NULL DEFAULT '',skills TEXT NOT NULL DEFAULT '',years INTEGER NOT NULL DEFAULT 0,desired_job TEXT NOT NULL DEFAULT '',public_resume INTEGER NOT NULL DEFAULT 0,grade INTEGER NOT NULL DEFAULT 0);
@@ -49,7 +50,21 @@ export function boardAccess(board:string,user:User|null) {
   if(positions[board])return user?.position===positions[board];
   return true;
 }
-export function safePost<T extends {board:string;author_id:string;author_name:string}>(post:T,user:User|null):T {
+// 채용 인증: 매장에 원장·디자이너로 소속돼 있거나 라운지 등업(1 이상)을 받은 회원.
+export function jobRights(user:User|null):JobRights {
+  if(!user)return {position:null,verified:false,isAdmin:false};
+  const salon=db.prepare("SELECT 1 FROM salon_members WHERE user_id=? AND role IN ('owner','designer')").get(user.id);
+  const grade=Number((db.prepare("SELECT grade FROM cafe_profiles WHERE user_id=?").get(user.id) as {grade:number}|undefined)?.grade??0);
+  return {position:user.position,verified:!!salon||grade>=1,isAdmin:user.isAdmin};
+}
+export function checkJobKind(user:User,kind:string) {
+  must(allowedJobKinds(jobRights(user)).includes(kind),jobSide(kind)==="hire"?"채용 글은 인증된 원장(알바·스페어는 디자이너도)만 쓸 수 있어요. 매장 등록이나 등업 후 이용해주세요":"글 유형을 확인해주세요",403);
+}
+const kindOf=(details:unknown)=>String((typeof details==="string"?JSON.parse(details):details as {kind?:string}|undefined)?.kind??"");
+export const isSeekPost=(post:{board:string;details?:unknown})=>post.board==="jobs"&&jobSide(kindOf(post.details))==="seek";
+export function safePost<T extends {board:string;author_id:string;author_name:string;body?:string;details?:unknown}>(post:T,user:User|null):T {
+  // 구직 글 본문(자기소개·연락처)은 채용 권한이 있는 회원·작성자·관리자에게만 보여준다.
+  if(isSeekPost(post)&&user?.id!==post.author_id&&!canHire(jobRights(user)))return {...post,body:"구직 글 본문은 채용 권한이 있는 회원(인증된 원장·디자이너)에게만 보여요.",...("attachments" in post?{attachments:[]}:{}),...("photos" in post?{photos:[]}:{}),masked:true};
   if(post.board!=="anonymous"||user?.isAdmin||user?.id===post.author_id)return post;
   return {...post,author_id:"anonymous",author_name:"익명 회원"};
 }

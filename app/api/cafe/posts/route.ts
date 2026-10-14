@@ -4,7 +4,7 @@ import path from "node:path";
 import { db } from "@/lib/server/db";
 import { getUser, limited, unauthorized, forbidden } from "@/lib/server/http";
 import { cafeError, cafeJson, cafeUploads, listCafePosts, validateCafePost } from "@/lib/server/cafe";
-import { boardAccess, safePost } from "@/lib/server/cafeServices";
+import { boardAccess, checkJobKind, safePost } from "@/lib/server/cafeServices";
 import { CAFE_BOARDS } from "@/lib/cafe";
 
 export async function GET(req: Request) {
@@ -34,6 +34,7 @@ export async function POST(req: Request) {
   catch (e) { return cafeError((e as Error).message); }
   if (post.board === "notice" && !user.isAdmin) return forbidden("공지사항은 관리자만 작성할 수 있어요");
   if(!boardAccess(post.board,user))return forbidden("해당 게시판의 이용 권한이 없어요");
+  if(post.board==="jobs"){try{checkJobKind(user,post.details.kind);}catch(e){return forbidden((e as Error).message);}}
   let pollOptions:string[]=[];
   if(post.board==='poll') {
     try { const raw=JSON.parse(String(form.get('pollOptions')||'[]'));if(!Array.isArray(raw))throw new Error();pollOptions=raw.map((v:unknown)=>String(v).trim()); }catch{return cafeError("설문 선택지를 확인해주세요");}

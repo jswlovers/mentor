@@ -11,7 +11,7 @@ export const CAFE_SERVICES=[
  {slug:'cart',name:'장바구니',description:'수량 변경·배송지 입력·주문'},
  {slug:'orders',name:'주문·배송',description:'입금·배송·구매 확정·후기·환불'},
  {slug:'selling',name:'판매 관리',description:'상품 등록·가격·재고·판매 상태'},
- {slug:'admin',name:'카페 운영',description:'등업·노출 신청·신고 검토'},
+ {slug:'admin',name:'라운지 운영',description:'등업·노출 신청·신고 검토'},
 ] as const;
 export const CAFE_ORDER_STATUS:Record<string,string>={awaiting_payment:'입금 대기',payment_submitted:'입금 확인 요청',paid:'입금 확인',shipped:'배송 중',completed:'구매 확정',cancelled:'취소',refund_requested:'환불 요청',refunded:'환불 완료'};
 export const CAFE_APPLICATION_STATUS:Record<string,string>={pending:'신청 대기',accepted:'승인',rejected:'반려',cancelled:'신청 취소'};

@@ -1,6 +1,6 @@
 import path from "node:path";
 import { DATA_DIR, db } from "./db";
-import { CAFE_REGIONS, CAFE_KINDS, EMPTY_CAFE_DETAILS, findCafeBoard, type CafeDetails, type CafePost } from "../cafe";
+import { CAFE_REGIONS, CAFE_KINDS, EMPTY_CAFE_DETAILS, JOB_REQUIRED, JOB_ROLES, detailLabel, findCafeBoard, jobSide, type CafeDetails, type CafePost } from "../cafe";
 db.exec(`
   CREATE TABLE IF NOT EXISTS cafe_posts (
     id INTEGER PRIMARY KEY AUTOINCREMENT, board TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL,
@@ -55,6 +55,14 @@ export function validateCafePost(value: Record<string, unknown>) {
         throw new Error("모집·거래 유형을 선택해주세요");
     if (board.listing && !details.region)
         throw new Error("모집·거래 글의 지역을 선택해주세요");
+    const side = board.slug === "jobs" ? jobSide(details.kind) : null;
+    if (side) {
+        const missing = JOB_REQUIRED[side].find(key => !details[key]);
+        if (missing)
+            throw new Error(`${detailLabel(missing, details.kind)}을(를) 입력해주세요`);
+        if (!(JOB_ROLES as readonly string[]).includes(details.role))
+            throw new Error("직급을 다시 선택해주세요");
+    }
     return { board: board.slug, title, body, details };
 }
 const SELECT = `SELECT p.*, u.name AS author_name,

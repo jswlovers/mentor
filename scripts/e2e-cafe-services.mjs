@@ -159,6 +159,12 @@ await service(seller,{action:'ad-request',postId:news,message:'승인 검증',co
 const approvedAd=(await admin.request('/api/cafe/services?area=admin')).data.ads.find(a=>a.post_id===news);
 check('추천 노출 승인',(await service(admin,{action:'ad-review',id:approvedAd.id,approved:true})).status===200);
 check('추천 노출 만료일 저장',!!(await request('/api/cafe/posts/'+news)).data.post.sponsored_until);
+const recent=(await buyer.request('/api/cafe/posts?scope=recent')).data.items;
+check('최근 본 글 모아보기',recent.some(p=>p.id===news)&&recent.some(p=>p.id===seek)&&!recent.some(p=>p.id===job));
+check('최근 본 글 로그인 필수',(await request('/api/cafe/posts?scope=recent')).status===401);
+const grouped=(await request('/api/cafe/posts?group='+encodeURIComponent('모집·거래'))).data.items;
+check('분류 묶어보기',grouped.some(p=>p.id===job)&&grouped.every(p=>['materials','jobs','used','salon-sale','model','volunteer','event'].includes(p.board)));
+check('없는 분류 거절',(await request('/api/cafe/posts?group='+encodeURIComponent('없음'))).status===400);
 
 console.log(`\n${count} service checks passed. UI seller: ${seller.username} / CafeTest123!`);
 db.close();

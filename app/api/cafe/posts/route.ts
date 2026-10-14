@@ -10,7 +10,7 @@ import { CAFE_BOARDS } from "@/lib/cafe";
 export async function GET(req: Request) {
   const user = getUser(req);
   const sp = new URL(req.url).searchParams;
-  if (["mine", "saved"].includes(sp.get("scope") || "") && !user) return unauthorized();
+  if (["mine", "saved", "recent"].includes(sp.get("scope") || "") && !user) return unauthorized();
   const excluded=CAFE_BOARDS.filter(b=>!boardAccess(b.slug,user)).map(b=>b.slug);
   if(excluded.includes(sp.get('board') as typeof excluded[number]))return forbidden("해당 게시판은 직급 또는 회원 등급에 맞는 회원만 이용할 수 있어요");
   try { const result=listCafePosts(sp,user?.id,excluded);return cafeJson({...result,items:result.items.map(p=>safePost(p,user))}); } catch (e) { return cafeError((e as Error).message); }

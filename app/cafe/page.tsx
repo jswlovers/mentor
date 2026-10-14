@@ -10,12 +10,8 @@ export default async function CafePage({searchParams}:{searchParams:Promise<{boa
   <section className="border-b border-border bg-surface px-6 py-10 md:px-10">
    <p className="text-xs font-bold tracking-widest text-rose-400">BEAUTY LOUNGE</p><h1 className="mt-2 text-3xl font-extrabold">라운지</h1>
    <p className="mt-3 text-sm text-muted">이야기와 배움부터 일자리, 쇼핑, 동료와의 만남까지.</p>
-   <div className="mt-6 grid gap-2 sm:grid-cols-2">
-    <Link href="/cafe/write?board=question" className="rounded-xl border border-rose-400/40 bg-rose-500/10 p-4 hover:border-rose-400"><p className="text-sm font-bold text-rose-300">동료에게 질문하기</p><p className="mt-1 text-xs text-muted">미용 질문·답변 게시판에 올리고 동료들의 해결 경험을 들어요</p></Link>
-    <Link href="/ask" className="rounded-xl border border-border bg-surface-2 p-4 hover:border-rose-400/50"><p className="text-sm font-bold">전문가에게 질문하기</p><p className="mt-1 text-xs text-muted">검증된 현직 전문가의 무료 답변, 급할 땐 1:1 상담까지</p></Link>
-   </div>
    <nav aria-label="라운지 서비스" className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-    {CAFE_SERVICES.map(service=><Link key={service.slug} href={`/cafe/services/${service.slug}`} className="rounded-xl border border-border bg-surface-2 p-3 hover:border-rose-400/50"><p className="text-sm font-bold">{service.name}</p><p className="mt-1 text-[11px] text-muted">{service.description}</p></Link>)}
+    {CAFE_SERVICES.filter(service=>service.slug!=='recent').map(service=><Link key={service.slug} href={`/cafe/services/${service.slug}`} className="rounded-xl border border-border bg-surface-2 p-3 hover:border-rose-400/50"><p className="text-sm font-bold">{service.name}</p><p className="mt-1 text-[11px] text-muted">{service.description}</p></Link>)}
     <a href="#calendar" className="rounded-xl border border-border bg-surface-2 p-3 text-sm font-bold">교육·모집 일정</a>
    </nav>
   </section>

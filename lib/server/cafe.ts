@@ -1,6 +1,6 @@
 import path from "node:path";
 import { DATA_DIR, db } from "./db";
-import { CAFE_REGIONS, CAFE_KINDS, EMPTY_CAFE_DETAILS, JOB_REQUIRED, JOB_ROLES, detailLabel, findCafeBoard, jobSide, type CafeDetails, type CafePost } from "../cafe";
+import { CAFE_BOARDS, CAFE_REGIONS, CAFE_KINDS, EMPTY_CAFE_DETAILS, JOB_REQUIRED, JOB_ROLES, detailLabel, findCafeBoard, jobSide, type CafeDetails, type CafePost } from "../cafe";
 db.exec(`
   CREATE TABLE IF NOT EXISTS cafe_posts (
     id INTEGER PRIMARY KEY AUTOINCREMENT, board TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL,
@@ -92,6 +92,15 @@ export function listCafePosts(sp: URLSearchParams, userId = "", excludedBoards: 
         conditions.push("p.board=?");
         args.push(board);
     }
+    // 큰 분류(소통·기술·교육 등)로 묶어 보기
+    const group = sp.get("group");
+    if (group && board === "all") {
+        const slugs = CAFE_BOARDS.filter(b => b.group === group).map(b => b.slug);
+        if (!slugs.length)
+            throw new Error("존재하지 않는 분류예요");
+        conditions.push(`p.board IN (${slugs.map(() => "?").join(",")})`);
+        args.push(...slugs);
+    }
     const q = (sp.get("q") || "").trim().slice(0, 100);
     if (q) {
         conditions.push("(instr(p.title,?)>0 OR instr(p.body,?)>0 OR (p.board!='anonymous' AND instr(u.name,?)>0))");
@@ -111,6 +120,10 @@ export function listCafePosts(sp: URLSearchParams, userId = "", excludedBoards: 
         conditions.push("p.author_id=?");
         args.push(userId);
     }
+    if (scope === "recent") {
+        conditions.push("EXISTS(SELECT 1 FROM cafe_recent r WHERE r.post_id=p.id AND r.user_id=?)");
+        args.push(userId);
+    }
     if (scope === "saved") {
         conditions.push("EXISTS(SELECT 1 FROM cafe_reactions r WHERE r.post_id=p.id AND r.user_id=? AND r.kind='save')");
         args.push(userId);
@@ -118,7 +131,11 @@ export function listCafePosts(sp: URLSearchParams, userId = "", excludedBoards: 
     const rawPage = Number(sp.get("page") || 1);
     const page = Number.isSafeInteger(rawPage) && rawPage > 0 ? Math.min(rawPage, 10000) : 1;
     const order = sp.get("sort") === "popular" ? "like_count DESC, comment_count DESC, p.id DESC" : "p.id DESC";
-    const rows = db.prepare(`${SELECT} WHERE ${conditions.join(" AND ")} ORDER BY p.pinned DESC,CASE WHEN p.sponsored_until>datetime('now') THEN 1 ELSE 0 END DESC, ${order} LIMIT 21 OFFSET ?`).all(...args, (page - 1) * 20);
+    // 최근 본 글은 고정·노출과 상관없이 마지막으로 본 순서대로 보여준다.
+    const orderBy = scope === "recent" ? "(SELECT r.viewed_at FROM cafe_recent r WHERE r.post_id=p.id AND r.user_id=?) DESC, p.id DESC" : `p.pinned DESC,CASE WHEN p.sponsored_until>datetime('now') THEN 1 ELSE 0 END DESC, ${order}`;
+    if (scope === "recent")
+        args.push(userId);
+    const rows = db.prepare(`${SELECT} WHERE ${conditions.join(" AND ")} ORDER BY ${orderBy} LIMIT 21 OFFSET ?`).all(...args, (page - 1) * 20);
     return { items: rows.slice(0, 20).map(hydrate), hasMore: rows.length > 20, page };
 }
 export function cafeAttendance(userId: string) {

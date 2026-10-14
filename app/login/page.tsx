@@ -29,7 +29,7 @@ export default function Login() {
     <div className="mx-auto max-w-sm px-6 py-14">
       <form onSubmit={submit} className="space-y-3 rounded-2xl border border-border bg-surface p-6">
         <h1 className="text-lg font-bold">{mode === "login" ? "로그인" : "회원가입"}</h1>
-        <input className={input} placeholder="아이디 (영문 소문자·숫자·_ 4~20자)" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" />
+        <input className={input} placeholder="아이디 (영문 소문자·숫자·_ 4~20자 또는 이메일)" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" />
         {mode === "signup" && <input className={input} placeholder="이름(닉네임)" value={name} onChange={(e) => setName(e.target.value)} />}
         <input className={input} type="password" placeholder="비밀번호 (8자 이상)" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete={mode === "login" ? "current-password" : "new-password"} />
         {mode === "signup" && (

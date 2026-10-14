@@ -15,7 +15,9 @@ export async function POST(req: Request) {
   if (agree !== true) return Response.json({ error: "이용약관과 개인정보 처리방침에 동의해주세요" }, { status: 400 });
   const u = String(username ?? "").trim().toLowerCase();
   const n = String(name ?? "").trim().slice(0, 20);
-  if (!/^[a-z0-9_]{4,20}$/.test(u)) return Response.json({ error: "아이디는 영문 소문자·숫자·_ 4~20자로 입력해주세요" }, { status: 400 });
+  // 아이디: 영문 소문자·숫자·_ 4~20자, 또는 이메일 주소(50자 이내)
+  const isEmail = u.length <= 50 && /^[a-z0-9._%+-]+@[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/.test(u);
+  if (!/^[a-z0-9_]{4,20}$/.test(u) && !isEmail) return Response.json({ error: "아이디는 영문 소문자·숫자·_ 4~20자 또는 이메일 주소로 입력해주세요" }, { status: 400 });
   if (String(password ?? "").length < 8) return Response.json({ error: "비밀번호는 8자 이상이어야 해요" }, { status: 400 });
   if (!n) return Response.json({ error: "이름(닉네임)을 입력해주세요" }, { status: 400 });
   if (findStmt.get(u)) return Response.json({ error: "이미 사용 중인 아이디예요" }, { status: 409 });

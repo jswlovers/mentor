@@ -9,7 +9,7 @@ const prod = process.argv.includes("--prod");
 if (prod) process.env.NODE_ENV = "production";
 
 const { default: next } = await import("next");
-const port = parseInt(process.env.PORT || "3000", 10);
+const port = 3004;
 const app = next({ dev: !prod });
 const handle = app.getRequestHandler();
 await app.prepare();

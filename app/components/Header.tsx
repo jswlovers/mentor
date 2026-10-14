@@ -48,9 +48,10 @@ export default function Header() {
   return (
     <>
     <header className="sticky top-0 z-10 border-b border-border bg-background/85 px-4 py-3 backdrop-blur-md">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <Link href="/" className="text-lg font-bold tracking-tight text-rose-400">미용 SOS</Link>
-        <div className="flex items-center gap-2 text-sm">
+        <div className="flex max-w-full flex-wrap items-center justify-end gap-2 text-sm">
+          <Link href="/cafe" aria-current={pathname.startsWith("/cafe") ? "page" : undefined} className="shrink-0 rounded-full border border-border px-3 py-1.5 text-rose-300 transition hover:border-rose-400/50">미용카페</Link>
           {me ? (
             <>
               {av && (

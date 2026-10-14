@@ -13,6 +13,7 @@ const ACTIONS = [
   { href: "/ask", icon: "✎", label: "질문하기", sub: "무료로 물어보기" },
   { href: "/color-ai", icon: "◎", label: "컬러핏 AI", sub: "염색 배합 진단" },
   { href: "/experts", icon: "☆", label: "전문가 찾기", sub: "분야별 검색" },
+  { href: "/cafe", icon: "☕", label: "미용카페", sub: "소통·구인구직" },
 ] as const;
 
 export default function Home() {
@@ -73,7 +74,7 @@ export default function Home() {
         <p className="mt-2 text-sm text-muted md:text-base">질문·1:1 상담·컬러 진단까지 한 곳에서 해결해요.</p>
         <AvailableNow className="mt-3" />
 
-        <div className="mt-7 grid grid-cols-3 gap-3 md:max-w-xl">
+        <div className="mt-7 grid grid-cols-2 gap-3 sm:grid-cols-4 md:max-w-2xl">
           {ACTIONS.map((a) => (
             <Link key={a.href} href={a.href} className="rounded-2xl border border-border bg-surface-2 px-3 py-5 text-center transition hover:border-white/20 hover:bg-white/5">
               <div className="mx-auto grid h-10 w-10 place-items-center rounded-xl bg-rose-500/15 text-lg text-rose-300">{a.icon}</div>

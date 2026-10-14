@@ -20,6 +20,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${base}/experts`, changeFrequency: "daily", priority: 0.8 },
     { url: `${base}/color-ai`, changeFrequency: "weekly", priority: 0.6 },
     { url: `${base}/cafe`, changeFrequency: "weekly", priority: 0.6 },
+    { url: `${base}/cafe/jobs`, changeFrequency: "daily", priority: 0.6 },
     { url: `${base}/terms`, changeFrequency: "yearly", priority: 0.1 },
     { url: `${base}/privacy`, changeFrequency: "yearly", priority: 0.1 },
     { url: `${base}/refund-policy`, changeFrequency: "yearly", priority: 0.1 },

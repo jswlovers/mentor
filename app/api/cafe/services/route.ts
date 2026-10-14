@@ -10,6 +10,8 @@ export async function GET(req:Request) {
  const user=getUser(req), sp=new URL(req.url).searchParams, area=sp.get("area")||"members";
  try {
   if(area==='promotion')return cafeJson({coins:promotionFee(),days:7});
+  // 구인구직 지도: 진행 중인 공고 수를 시·도/시·군·구별로 센다
+  if(area==='job-map'){const side=sp.get('side')==='seek'?'%구직':'%채용';return cafeJson({items:db.prepare("SELECT json_extract(details,'$.region') AS region,json_extract(details,'$.district') AS district,COUNT(*) AS n FROM cafe_posts WHERE board='jobs' AND status='open' AND deleted_at IS NULL AND json_extract(details,'$.kind') LIKE ? GROUP BY 1,2").all(side)});}
   if(area==="members") {
    const q=(sp.get("q")||"").slice(0,100),region=sp.get("region")||"";
    const items=db.prepare(`SELECT u.id,u.name,u.position,p.bio,p.region,p.skills,p.years,p.desired_job,p.grade,

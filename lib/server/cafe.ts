@@ -1,4 +1,5 @@
 import path from "node:path";
+import { CITY_DISTRICTS } from "../regions";
 import { DATA_DIR, db } from "./db";
 import { CAFE_BOARDS, CAFE_REGIONS, CAFE_KINDS, EMPTY_CAFE_DETAILS, JOB_REQUIRED, JOB_ROLES, detailLabel, findCafeBoard, jobSide, type CafeDetails, type CafePost } from "../cafe";
 db.exec(`
@@ -57,6 +58,8 @@ export function validateCafePost(value: Record<string, unknown>) {
         throw new Error("모집·거래 글의 지역을 선택해주세요");
     const side = board.slug === "jobs" ? jobSide(details.kind) : null;
     if (side) {
+        if (!CITY_DISTRICTS[details.region] || !CITY_DISTRICTS[details.region].includes(details.district))
+            throw new Error("구인구직 지역(시·도와 시·군·구)을 다시 선택해주세요");
         const missing = JOB_REQUIRED[side].find(key => !details[key]);
         if (missing)
             throw new Error(`${detailLabel(missing, details.kind)}을(를) 입력해주세요`);
@@ -110,6 +113,17 @@ export function listCafePosts(sp: URLSearchParams, userId = "", excludedBoards: 
     if (region) {
         conditions.push("json_extract(p.details,'$.region')=?");
         args.push(region);
+    }
+    const district = sp.get("district");
+    if (district) {
+        conditions.push("json_extract(p.details,'$.district')=?");
+        args.push(district);
+    }
+    // 구인구직 대분류: 구인(…채용) / 구직(…구직)
+    const side = sp.get("side");
+    if (side === "hire" || side === "seek") {
+        conditions.push("json_extract(p.details,'$.kind') LIKE ?");
+        args.push(side === "hire" ? "%채용" : "%구직");
     }
     const kind=sp.get('kind');if(kind){conditions.push("json_extract(p.details,'$.kind')=?");args.push(kind);}
     const tag=sp.get('tag');if(tag){conditions.push("instr(json_extract(p.details,'$.tags'),?)>0");args.push(tag.slice(0,50));}

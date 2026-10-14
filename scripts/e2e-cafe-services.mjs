@@ -131,17 +131,18 @@ check('상품 사진 업로드',(await seller.request('/api/cafe/market/'+pid+'/
 check('상품 사진 조회',(await fetch(base+'/api/cafe/market/'+pid+'/photo')).status===200);
 check('타인 상품 사진 수정 차단',(await buyer.request('/api/cafe/market/'+pid+'/photo','POST',imageForm)).status===403);
 const jobForm=(details)=>{const f=new FormData();f.set('board','jobs');f.set('title','채용 권한 검증');f.set('body','검증');f.set('details',JSON.stringify(details));return f;};
-const hire={kind:'정규 채용',region:'서울',tags:'커트 염색',salon:'테스트 살롱',role:'디자이너',price:'월 300만원'};
+const hire={kind:'정규 채용',region:'서울',district:'강남구',tags:'커트 염색',salon:'테스트 살롱',role:'디자이너',price:'월 300만원'};
 check('직급 없는 회원 채용 글 차단',(await seller.request('/api/cafe/posts','POST',jobForm(hire))).status===403);
 db.prepare('UPDATE users SET position=? WHERE id=?').run('원장',seller.id);
 check('미인증 원장 채용 글 차단',(await seller.request('/api/cafe/posts','POST',jobForm(hire))).status===403);
 db.prepare('INSERT INTO cafe_profiles(user_id,grade) VALUES(?,1) ON CONFLICT(user_id) DO UPDATE SET grade=1').run(seller.id);
+check('구인구직 시·군·구 검사',(await seller.request('/api/cafe/posts','POST',jobForm({...hire,district:'해운대구'}))).status===400);
 check('채용 필수 항목(매장명) 검사',(await seller.request('/api/cafe/posts','POST',jobForm({...hire,salon:''}))).status===400);
 db.prepare('UPDATE users SET position=? WHERE id=?').run('디자이너',other.id);
 check('디자이너 정규 채용 차단',(await other.request('/api/cafe/posts','POST',jobForm(hire))).status===403);
 check('채용 권한 조회',(await seller.request('/api/cafe/services?area=job-rights')).data.verified===true);
 const job=await create(seller,'jobs',hire);
-const seek=await create(other,'jobs',{kind:'정규 구직',region:'서울',role:'디자이너',career:'디자이너 5년'});
+const seek=await create(other,'jobs',{kind:'정규 구직',region:'서울',district:'마포구',role:'디자이너',career:'디자이너 5년'});
 check('구직 글 본문 비권한자 숨김',(await buyer.request('/api/cafe/posts/'+seek)).data.post.masked===true);
 check('구직 글 목록 본문 숨김',(await request('/api/cafe/posts?board=jobs')).data.items.find(p=>p.id===seek).masked===true);
 check('구직 글 본문 채용자 열람',(await seller.request('/api/cafe/posts/'+seek)).data.post.body==='통합 검증용 글입니다');
@@ -203,6 +204,13 @@ let reminded=false;for(let i=0;i<16&&!reminded;i++){reminded=!!db.prepare("SELEC
 check('면접 리마인드 (지원자)',reminded);
 check('면접 리마인드 (매장)',!!db.prepare("SELECT 1 FROM notifications WHERE user_id=? AND body LIKE '면접 알림:%'").get(seller.id));
 check('리마인드 한 번만',db.prepare("SELECT COUNT(*) AS n FROM notifications WHERE user_id=? AND body LIKE '면접 알림:%'").get(buyer.id).n===1&&!!db.prepare("SELECT reminded_at FROM cafe_applications WHERE id=?").get(jobApp.id).reminded_at);
+// 구인구직: 대분류(구인·구직) · 시·도 · 시·군·구 필터와 지도 집계
+const hires=(await request('/api/cafe/posts?board=jobs&side=hire&region='+encodeURIComponent('서울')+'&district='+encodeURIComponent('강남구'))).data.items;
+check('구인 지역 필터',hires.some(p=>p.id===job)&&hires.every(p=>p.details.kind.endsWith('채용')&&p.details.district==='강남구'));
+check('구직 대분류 필터',(await request('/api/cafe/posts?board=jobs&side=seek')).data.items.every(p=>p.details.kind.endsWith('구직')));
+check('다른 구 공고 제외',!(await request('/api/cafe/posts?board=jobs&side=hire&district='+encodeURIComponent('마포구'))).data.items.some(p=>p.id===job));
+const map=(await request('/api/cafe/services?area=job-map&side=seek')).data.items;
+check('구직 지도 집계',map.some(c=>c.region==='서울'&&c.district==='마포구'&&c.n>=1));
 const recent=(await buyer.request('/api/cafe/posts?scope=recent')).data.items;
 check('최근 본 글 모아보기',recent.some(p=>p.id===news)&&recent.some(p=>p.id===seek)&&!recent.some(p=>p.id===job));
 check('최근 본 글 로그인 필수',(await request('/api/cafe/posts?scope=recent')).status===401);

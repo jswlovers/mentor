@@ -63,19 +63,20 @@ export type CafeDetails = {
     role: string;
     hours: string;
     career: string;
+    district: string;
 };
-export const EMPTY_CAFE_DETAILS: CafeDetails = { region: "", place: "", date: "", price: "", kind: "", url: "", product: "", formula: "", deposit: "", rent: "", area: "", capacity: "", fee: "", deadline: "", tags: "", salon: "", role: "", hours: "", career: "" };
-export const CAFE_DETAIL_LABELS: Record<keyof CafeDetails, string> = { region: "지역", place: "장소·상세 지역", date: "일정", price: "금액·급여·참가비", kind: "유형", url: "참고 링크", product: "사용 제품", formula: "배합·시술 조건", deposit: "보증금", rent: "월세", area: "면적", capacity: "모집 정원", fee: "참가비 (원)", deadline: "신청 마감일", tags: "분야·태그", salon: "매장명", role: "직급", hours: "근무 시간", career: "경력" };
+export const EMPTY_CAFE_DETAILS: CafeDetails = { region: "", place: "", date: "", price: "", kind: "", url: "", product: "", formula: "", deposit: "", rent: "", area: "", capacity: "", fee: "", deadline: "", tags: "", salon: "", role: "", hours: "", career: "", district: "" };
+export const CAFE_DETAIL_LABELS: Record<keyof CafeDetails, string> = { region: "지역", place: "장소·상세 지역", date: "일정", price: "금액·급여·참가비", kind: "유형", url: "참고 링크", product: "사용 제품", formula: "배합·시술 조건", deposit: "보증금", rent: "월세", area: "면적", capacity: "모집 정원", fee: "참가비 (원)", deadline: "신청 마감일", tags: "분야·태그", salon: "매장명", role: "직급", hours: "근무 시간", career: "경력", district: "시·군·구" };
 export const CAFE_KINDS: Partial<Record<CafeBoard, string[]>> = { materials: ["미용재료", "미용도구", "미용도서", "지역 재료상"], jobs: ["정규 채용", "정규 구직", "알바·스페어 채용", "알바·스페어 구직"], used: ["팝니다", "삽니다", "무료나눔"], education: ["교육", "세미나", "스터디", "정모"], model: ["모델 모집", "모델 지원"], volunteer: ["봉사 모집", "봉사 지원", "봉사 후기"], "salon-sale": ["매장 양도", "매장 인수"], event: ["이벤트", "무료나눔"] };
 // 채용·구직 글: 직급과 인증(매장 등록 또는 라운지 등업)에 따라 쓸 수 있는 유형과 입력 항목이 달라진다.
 export type JobSide = "hire" | "seek";
 export const jobSide = (kind: string): JobSide | null => kind.endsWith("채용") ? "hire" : kind.endsWith("구직") ? "seek" : null;
 export const JOB_ROLES = ["디자이너", "인턴", "점장·원장급", "무관"] as const;
-export const JOB_FIELDS: Record<JobSide, (keyof CafeDetails)[]> = { hire: ["region", "place", "salon", "role", "price", "hours", "deadline", "capacity", "tags"], seek: ["region", "role", "career", "price", "hours", "tags"] };
-export const JOB_REQUIRED: Record<JobSide, (keyof CafeDetails)[]> = { hire: ["salon", "role", "price"], seek: ["role", "career"] };
+export const JOB_FIELDS: Record<JobSide, (keyof CafeDetails)[]> = { hire: ["region", "district", "place", "salon", "role", "price", "hours", "deadline", "capacity", "tags"], seek: ["region", "district", "role", "career", "price", "hours", "tags"] };
+export const JOB_REQUIRED: Record<JobSide, (keyof CafeDetails)[]> = { hire: ["district", "salon", "role", "price"], seek: ["district", "role", "career"] };
 const JOB_LABELS: Record<JobSide, Partial<Record<keyof CafeDetails, string>>> = {
     hire: { region: "근무 지역", place: "상세 위치", role: "모집 직급", price: "급여", hours: "근무 시간", capacity: "모집 인원" },
-    seek: { region: "희망 지역", role: "희망 직급", price: "희망 급여", hours: "희망 근무 시간" },
+    seek: { region: "희망 지역", district: "희망 시·군·구", role: "희망 직급", price: "희망 급여", hours: "희망 근무 시간" },
 };
 export const detailLabel = (key: keyof CafeDetails, kind = "") => { const side = jobSide(kind); return (side && JOB_LABELS[side][key]) || CAFE_DETAIL_LABELS[key]; };
 export type JobRights = { position: string | null; verified: boolean; isAdmin: boolean };

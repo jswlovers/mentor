@@ -187,6 +187,22 @@ check('면접 일시 저장',confirmed.application.status==='interview_confirmed
 check('중복 확정 차단',(await service(buyer,{action:'interview-accept',messageId:proposal.id})).status===409);
 check('합격 처리',(await service(seller,{action:'application-status',id:jobApp.id,status:'accepted'})).status===200);
 check('종료 후 대화 차단',(await service(buyer,{action:'application-message',id:jobApp.id,body:'감사합니다'})).status===409);
+// 노쇼 방지: 지난 면접 불참 기록, 24시간 전 리마인드
+const kst=ms=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(new Date(ms)).replace(' ','T');
+await service(other,{action:'resume',...resume,name:'다른 지원자',phone:'010-2222-3333'});
+check('두 번째 지원',(await service(other,{action:'apply',postId:job})).status===200);
+const otherApp=(await seller.request('/api/cafe/services?area=applications')).data.items.find(i=>i.post_id===job&&i.user_id===other.id);
+db.prepare("UPDATE cafe_applications SET status='interview_confirmed',interview_at=? WHERE id=?").run(kst(Date.now()-3600_000),otherApp.id);
+check('지난 면접 지원 취소 차단',(await service(other,{action:'application-status',id:otherApp.id,status:'cancelled'})).status===409);
+check('불참 기록 권한',(await service(buyer,{action:'application-status',id:otherApp.id,status:'no_show'})).status===403);
+check('면접 불참 기록',(await service(seller,{action:'application-status',id:otherApp.id,status:'no_show'})).status===200);
+check('불참 횟수 표시',(await seller.request('/api/cafe/services?area=applications')).data.items.find(i=>i.id===otherApp.id).no_show_count===1);
+db.prepare("UPDATE cafe_applications SET status='interview_confirmed',interview_at=?,reminded_at=NULL WHERE id=?").run(kst(Date.now()+2*3600_000),jobApp.id);
+check('지나지 않은 면접 불참 기록 차단',(await service(seller,{action:'application-status',id:jobApp.id,status:'no_show'})).status===409);
+let reminded=false;for(let i=0;i<16&&!reminded;i++){reminded=!!db.prepare("SELECT 1 FROM notifications WHERE user_id=? AND body LIKE '면접 알림:%'").get(buyer.id);if(!reminded)await new Promise(r=>setTimeout(r,5000));}
+check('면접 리마인드 (지원자)',reminded);
+check('면접 리마인드 (매장)',!!db.prepare("SELECT 1 FROM notifications WHERE user_id=? AND body LIKE '면접 알림:%'").get(seller.id));
+check('리마인드 한 번만',db.prepare("SELECT COUNT(*) AS n FROM notifications WHERE user_id=? AND body LIKE '면접 알림:%'").get(buyer.id).n===1&&!!db.prepare("SELECT reminded_at FROM cafe_applications WHERE id=?").get(jobApp.id).reminded_at);
 const recent=(await buyer.request('/api/cafe/posts?scope=recent')).data.items;
 check('최근 본 글 모아보기',recent.some(p=>p.id===news)&&recent.some(p=>p.id===seek)&&!recent.some(p=>p.id===job));
 check('최근 본 글 로그인 필수',(await request('/api/cafe/posts?scope=recent')).status===401);

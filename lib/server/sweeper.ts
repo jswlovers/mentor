@@ -2,6 +2,7 @@ import { db } from "./db";
 import { cancelAndRefund, type Consultation } from "./consult";
 import { callExperts, hasCalledWave } from "./matching";
 import { notify } from "./notify";
+import { remindInterviews } from "./cafeServices";
 import { AUTO_REFUND_MINUTES, SWEEP_INTERVAL_SECONDS, WAVE2_MINUTES } from "./pricing";
 
 const secs = (minutes: number) => `-${Math.max(1, Math.round(minutes * 60))} seconds`;
@@ -15,7 +16,7 @@ const wave2Stmt = db.prepare(
 );
 
 /**
- * 주기 작업(1분): ① 전문가가 안 온 상담에 다음 전문가들을 호출(wave 2), ② 제한 시간이 지난 상담을 자동 취소·전액 환불.
+ * 주기 작업(1분): ① 전문가가 안 온 상담에 다음 전문가들을 호출(wave 2), ② 제한 시간이 지난 상담을 자동 취소·전액 환불, ③ 면접 리마인드.
  * 모든 판단은 DB의 시간 조건으로만 하므로 서버가 재시작돼도 다음 주기에 이어서 처리된다.
  */
 export function sweepOnce() {
@@ -37,6 +38,9 @@ export function sweepOnce() {
     }
     if (done) notify(c.asker_id, "전문가가 참여하지 않아 상담이 자동 취소되고 전액 환불됐어요", `/chat/${c.room_id}`, { kind: "consult_expired" });
   }
+
+  // ③ 라운지 채용: 24시간 안에 다가온 확정 면접을 양쪽에 한 번 알린다
+  remindInterviews();
 }
 
 const g = globalThis as unknown as { __mentorSweeper?: ReturnType<typeof setInterval> };

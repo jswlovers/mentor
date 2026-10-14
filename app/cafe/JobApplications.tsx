@@ -24,6 +24,8 @@ export function ResumeView({resume}:{resume:Resume}){
 
 type Message={id:number;author_id:string;author_name:string;body:string;interview_at:string|null;accepted_at:string|null;created_at:string};
 const telHref=(phone:string)=>phone.replace(/[^0-9]/g,'');
+// 한국 시간 'YYYY-MM-DDTHH:MM' (면접 일시와 문자열로 비교)
+const kstNow=()=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(new Date()).replace(' ','T');
 
 // 지원서 하나: 이력서 보기, 연락(문자·전화), 면접 날짜를 맞추는 대화, 합격·불합격 처리.
 function JobApplication({a,me,run,busy,reload}:{a:Item;me:Me|null;run:Run;busy:boolean;reload:()=>void}){
@@ -36,8 +38,9 @@ function JobApplication({a,me,run,busy,reload}:{a:Item;me:Me|null;run:Run;busy:b
  const post=async(value:Record<string,unknown>)=>{setSending(true);setError('');try{const r=await api('/api/cafe/services',jsonInit('POST',value));if(!r.ok){setError(r.data.error||'보내지 못했어요');return false;}await loadChat();reload();return true;}catch{setError('연결을 확인해주세요');return false;}finally{setSending(false);}};
  const toggleResume=()=>{setShowResume(v=>!v);if(owner&&!a.viewed_at)api('/api/cafe/services',jsonInit('POST',{action:'resume-viewed',id:a.id})).catch(()=>{});};
  const phone=a.resume?.phone||'';
+ const interviewPassed=a.status==='interview_confirmed'&&!!a.interview_at&&a.interview_at<=kstNow();
  return <article className={card+' space-y-3'}>
-  <div className="flex flex-wrap items-start justify-between gap-2"><div><Link href={`/cafe/posts/${a.post_id}`} className="font-bold text-rose-300">{a.title}</Link><p className="mt-1 text-xs text-muted">{owner?`지원자 ${a.applicant_name}`:'내 지원'} · {timeAgo(String(a.created_at||''))}{!owner&&a.viewed_at?' · 매장이 이력서를 확인했어요':''}</p></div>
+  <div className="flex flex-wrap items-start justify-between gap-2"><div><Link href={`/cafe/posts/${a.post_id}`} className="font-bold text-rose-300">{a.title}</Link><p className="mt-1 text-xs text-muted">{owner?`지원자 ${a.applicant_name}`:'내 지원'} · {timeAgo(String(a.created_at||''))}{!owner&&a.viewed_at?' · 매장이 이력서를 확인했어요':''}</p>{owner&&!!a.no_show_count&&<p className="mt-1 text-xs font-semibold text-amber-300">⚠ 이 지원자는 면접 불참 기록이 {a.no_show_count}회 있어요</p>}</div>
    <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${a.status==='interview_confirmed'||a.status==='accepted'?'bg-emerald-500/15 text-emerald-300':a.status==='interview'?'bg-amber-500/15 text-amber-300':'bg-surface-2 text-muted'}`}>{JOB_APPLICATION_STATUS[a.status||'']}</span></div>
   {a.interview_at&&<p className="rounded-xl bg-emerald-500/10 p-3 text-sm text-emerald-300">면접 일시: {a.interview_at.replace('T',' ')}</p>}
   {a.message&&<p className="whitespace-pre-wrap text-sm">{a.message}</p>}
@@ -45,12 +48,13 @@ function JobApplication({a,me,run,busy,reload}:{a:Item;me:Me|null;run:Run;busy:b
    {a.resume&&<button onClick={toggleResume} className={button}>{showResume?'이력서 접기':owner?'이력서 보기':'제출한 이력서'}</button>}
    {active&&<button onClick={()=>setOpen(v=>!v)} className={button}>{open?'대화 닫기':`면접 일정 대화${a.message_count?` (${a.message_count})`:''}`}</button>}
    {owner&&phone&&<><a href={`sms:${telHref(phone)}`} className={button}>문자 보내기</a><a href={`tel:${telHref(phone)}`} className={button}>전화하기</a></>}
+   {owner&&interviewPassed&&<button disabled={busy} onClick={()=>run({action:'application-status',id:a.id,status:'no_show'})} className={button+' text-amber-300'}>면접 불참</button>}
    {owner&&active&&<><button disabled={busy} onClick={()=>run({action:'application-status',id:a.id,status:'accepted'})} className={button}>합격</button><button disabled={busy} onClick={()=>run({action:'application-status',id:a.id,status:'rejected'})} className={button}>불합격</button></>}
-   {!owner&&active&&<button disabled={busy} onClick={()=>run({action:'application-status',id:a.id,status:'cancelled'})} className={button}>지원 취소</button>}
+   {!owner&&active&&!interviewPassed&&<button disabled={busy} onClick={()=>run({action:'application-status',id:a.id,status:'cancelled'})} className={button}>지원 취소</button>}
   </div>
   {showResume&&a.resume&&<ResumeView resume={a.resume}/>}
   {open&&<div className="space-y-3 rounded-xl border border-border p-3">
-   <p className="text-xs text-muted">서로 가능한 날짜를 이야기한 뒤, 한쪽이 날짜를 제안하고 상대가 수락하면 면접이 확정돼요. 새 메시지는 알림·문자로 전해져요.</p>
+   <p className="text-xs text-muted">확정된 면접은 하루 전에 알림·문자로 다시 알려드려요. 서로 가능한 날짜를 이야기한 뒤, 한쪽이 날짜를 제안하고 상대가 수락하면 면접이 확정돼요. 새 메시지는 알림·문자로 전해져요.</p>
    {error&&<p role="alert" className="text-sm text-rose-300">{error}</p>}
    <ul className="max-h-80 space-y-2 overflow-y-auto">{chat===null?<li className="text-sm text-muted">불러오는 중…</li>:chat.length===0?<li className="text-sm text-muted">아직 대화가 없어요. 먼저 인사를 건네보세요.</li>:chat.map(m=>{const mine=m.author_id===me?.id;return <li key={m.id} className={`max-w-[85%] rounded-xl p-3 text-sm ${mine?'ml-auto bg-rose-500/15':'bg-surface-2'}`}>
     <p className="text-[11px] text-muted">{m.author_name} · {timeAgo(m.created_at)}</p><p className="mt-1 whitespace-pre-wrap break-words">{m.body}</p>

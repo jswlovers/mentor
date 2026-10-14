@@ -135,3 +135,18 @@ export function interviewTime(value:unknown) {
   return at;
 }
 export const interviewLabel=(at:string)=>at.replace("T"," ");
+
+// ── 면접 노쇼 방지: 24시간 전 리마인드, 면접 후 불참 기록 ──
+try{db.exec("ALTER TABLE cafe_applications ADD COLUMN reminded_at TEXT");}catch{}
+/** 한국 시간 'YYYY-MM-DDTHH:MM' (면접 일시와 같은 형식이라 문자열로 비교한다) */
+export const kstMinute=(ms=Date.now())=>new Intl.DateTimeFormat("sv-SE",{timeZone:"Asia/Seoul",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).format(new Date(ms)).replace(" ","T");
+export function remindInterviews() {
+  const now=Date.now();
+  const rows=db.prepare("SELECT a.id,a.user_id,a.interview_at,p.author_id,p.title FROM cafe_applications a JOIN cafe_posts p ON p.id=a.post_id WHERE a.status='interview_confirmed' AND a.reminded_at IS NULL AND a.interview_at>? AND a.interview_at<=?").all(kstMinute(now),kstMinute(now+24*3600_000)) as {id:number;user_id:string;interview_at:string;author_id:string;title:string}[];
+  for(const r of rows){
+    if(!db.prepare("UPDATE cafe_applications SET reminded_at=datetime('now') WHERE id=? AND reminded_at IS NULL").run(r.id).changes)continue;
+    const at=interviewLabel(r.interview_at),vars={title:r.title,at};
+    notify(r.user_id,`면접 알림: ${at} · ‘${r.title}’. 못 오시게 되면 대화방에 미리 알려주세요`,"/cafe/services/activity",{kind:"job_reminder",vars});
+    notify(r.author_id,`면접 알림: ${at} · ‘${r.title}’ 지원자와의 면접이 다가와요`,"/cafe/services/activity",{kind:"job_reminder",vars});
+  }
+}

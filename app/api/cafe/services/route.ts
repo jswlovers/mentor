@@ -3,7 +3,7 @@ import { getUser, limited, unauthorized } from "@/lib/server/http";
 import { cafeJson, cafeError } from "@/lib/server/cafe";
 import { canHire, findCafeBoard, jobSide } from "@/lib/cafe";
 import { notify } from "@/lib/server/notify";
-import { ACTIVE_APPLICATION, CafeServiceError, boardAccess, ensureProfile, getResume, interviewLabel, interviewTime, isSeekPost, jobApplication, jobRights, getServicePost, saveResume, integer, matchScore, must, notifyOwner, profile, promotionFee, saveProfile, textField, transaction } from "@/lib/server/cafeServices";
+import { ACTIVE_APPLICATION, CafeServiceError, kstMinute, boardAccess, ensureProfile, getResume, interviewLabel, interviewTime, isSeekPost, jobApplication, jobRights, getServicePost, saveResume, integer, matchScore, must, notifyOwner, profile, promotionFee, saveProfile, textField, transaction } from "@/lib/server/cafeServices";
 import { debitCoins,refundFromRevenue,InsufficientCoinsError } from '@/lib/server/coins';
 
 export async function GET(req:Request) {
@@ -32,7 +32,8 @@ export async function GET(req:Request) {
   }
   if(area==="resume")return cafeJson({resume:getResume(user.id),name:user.name});
   if(area==="applications")return cafeJson({items:(db.prepare(`SELECT a.*,p.title,p.author_id AS owner_id,p.board,u.name AS applicant_name,
-    (SELECT COUNT(*) FROM cafe_application_messages m WHERE m.application_id=a.id) AS message_count
+    (SELECT COUNT(*) FROM cafe_application_messages m WHERE m.application_id=a.id) AS message_count,
+    (SELECT COUNT(*) FROM cafe_applications n WHERE n.user_id=a.user_id AND n.status='no_show') AS no_show_count
     FROM cafe_applications a JOIN cafe_posts p ON p.id=a.post_id JOIN users u ON u.id=a.user_id WHERE a.user_id=? OR p.author_id=? ORDER BY a.id DESC LIMIT 200`).all(user.id,user.id) as {resume:string|null}[]).map(a=>({...a,resume:a.resume?JSON.parse(a.resume):null}))});
   if(area==="application-chat") {
    const a=jobApplication(sp.get("id"),user);
@@ -84,8 +85,10 @@ export async function POST(req:Request) {
    });
   } else if(value.action==="application-status") {
    transaction(()=>{const r=db.prepare("SELECT a.*,p.author_id,p.details,p.status AS post_status FROM cafe_applications a JOIN cafe_posts p ON p.id=a.post_id WHERE a.id=?").get(integer(value.id,1,1e10,"신청 번호")) as {id:number;user_id:string;author_id:string;details:string;status:string;post_id:number;post_status:string}|undefined;must(r,"신청 내역이 없어요",404);
-    const status=String(value.status);must(['accepted','rejected','cancelled'].includes(status),"처리 상태를 확인해주세요");
-    if(status==='cancelled')must(r.user_id===user.id,"신청자만 취소할 수 있어요",403);else must(r.author_id===user.id,"모집 작성자만 처리할 수 있어요",403);
+    const status=String(value.status);must(['accepted','rejected','cancelled','no_show'].includes(status),"처리 상태를 확인해주세요");
+    // 면접 불참: 확정된 면접 시간이 지난 뒤에만 매장이 기록한다(다른 매장의 지원서 화면에 불참 횟수로 보인다).
+    if(status==='no_show'){must(r.author_id===user.id,"공고 작성자만 기록할 수 있어요",403);const at=(r as {interview_at?:string|null}).interview_at;must(r.status==='interview_confirmed'&&at&&at<=kstMinute(),"확정된 면접 시간이 지난 뒤에 기록할 수 있어요",409);db.prepare("UPDATE cafe_applications SET status='no_show' WHERE id=?").run(r.id);notifyOwner(r.user_id,"면접 불참으로 기록됐어요. 일정이 어려우면 다음에는 미리 알려주세요");return;}
+    if(status==='cancelled'){must(r.user_id===user.id,"신청자만 취소할 수 있어요",403);const at=(r as {interview_at?:string|null}).interview_at;must(!(r.status==='interview_confirmed'&&at&&at<=kstMinute()),"면접 시간이 지나 취소할 수 없어요. 매장에 대화로 알려주세요",409);}else must(r.author_id===user.id,"모집 작성자만 처리할 수 있어요",403);
     must([...ACTIVE_APPLICATION,'accepted'].includes(r.status),"이미 처리된 신청이에요",409);
     if(status==='accepted'){must(ACTIVE_APPLICATION.includes(r.status)&&r.post_status==='open',"승인할 수 없는 신청이에요",409);const cap=Number(JSON.parse(r.details).capacity||0);const used=(db.prepare("SELECT COUNT(*) AS n FROM cafe_applications WHERE post_id=? AND status='accepted'").get(r.post_id) as {n:number}).n;must(!cap||used<cap,"모집 정원이 찼어요",409);}
     db.prepare("UPDATE cafe_applications SET status=? WHERE id=?").run(status,r.id);notifyOwner(status==='cancelled'?r.author_id:r.user_id,"모집 신청 상태가 변경됐어요");
@@ -111,7 +114,7 @@ export async function POST(req:Request) {
     must(m.author_id!==user.id,"상대방이 제안한 날짜만 수락할 수 있어요",403);must(!m.accepted_at,"이미 확정한 날짜예요",409);must(ACTIVE_APPLICATION.includes(a.status),"진행 중인 지원이 아니에요",409);
     interviewTime(m.interview_at);
     db.prepare("UPDATE cafe_application_messages SET accepted_at=datetime('now') WHERE id=?").run(m.id);
-    db.prepare("UPDATE cafe_applications SET status='interview_confirmed',interview_at=? WHERE id=?").run(m.interview_at,a.id);
+    db.prepare("UPDATE cafe_applications SET status='interview_confirmed',interview_at=?,reminded_at=NULL WHERE id=?").run(m.interview_at,a.id);
     db.prepare("INSERT INTO cafe_application_messages(application_id,author_id,body) VALUES(?,?,?)").run(a.id,user.id,`✅ 면접 확정: ${interviewLabel(m.interview_at)}`);
     for(const id of [a.user_id,a.author_id])notify(id,`면접 확정 ${interviewLabel(m.interview_at)} · ‘${a.title}’`,"/cafe/services/activity",{kind:"job_interview",vars:{title:a.title,at:interviewLabel(m.interview_at)}});
    });

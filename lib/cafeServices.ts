@@ -17,4 +17,4 @@ export const CAFE_SERVICES=[
 export const CAFE_ORDER_STATUS:Record<string,string>={awaiting_payment:'입금 대기',payment_submitted:'입금 확인 요청',paid:'입금 확인',shipped:'배송 중',completed:'구매 확정',cancelled:'취소',refund_requested:'환불 요청',refunded:'환불 완료'};
 export const CAFE_APPLICATION_STATUS:Record<string,string>={pending:'신청 대기',accepted:'승인',rejected:'반려',cancelled:'신청 취소'};
 // 채용 지원(이력서 제출) 단계
-export const JOB_APPLICATION_STATUS:Record<string,string>={pending:'서류 검토 중',interview:'면접 일정 조율 중',interview_confirmed:'면접 확정',accepted:'합격',rejected:'불합격',cancelled:'지원 취소'};
+export const JOB_APPLICATION_STATUS:Record<string,string>={pending:'서류 검토 중',interview:'면접 일정 조율 중',interview_confirmed:'면접 확정',accepted:'합격',rejected:'불합격',cancelled:'지원 취소',no_show:'면접 불참'};

@@ -8,11 +8,11 @@ export const CAFE_SERVICES:readonly {slug:string;name:string;description:string;
  {slug:'jobs',name:'구인구직',description:'구인·구직을 지역 지도로 찾기',href:'/cafe/jobs'},
  {slug:'activity',name:'신청 관리',description:'받은 이력서·면접 대화, 교육·모델·봉사 신청'},
  {slug:'inbox',name:'문의함',description:'작성자와 주고받는 비공개 문의'},
- {slug:'market',name:'미용 쇼핑',description:'재료·도구·도서·중고 상품과 상품 문의·판매 관리'},
+ {slug:'market',name:'미용 쇼핑',description:'재료·도구·도서·중고 상품, 장바구니·주문·상품 문의·판매 관리'},
+ {slug:'cart',name:'장바구니',description:'수량 변경·배송지 입력·주문',parent:'market'},
+ {slug:'orders',name:'주문·배송',description:'입금·배송·구매 확정·후기·환불',parent:'market'},
  {slug:'product-inbox',name:'상품 문의',description:'상품 질문과 판매자 답변',parent:'market'},
  {slug:'selling',name:'판매 관리',description:'상품 등록·가격·재고·판매 상태',parent:'market'},
- {slug:'cart',name:'장바구니',description:'수량 변경·배송지 입력·주문'},
- {slug:'orders',name:'주문·배송',description:'입금·배송·구매 확정·후기·환불'},
  {slug:'admin',name:'라운지 운영',description:'등업·노출 신청·신고 검토'},
 ];
 export const serviceHref=(s:{slug:string;href?:string})=>s.href??`/cafe/services/${s.slug}`;

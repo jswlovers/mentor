@@ -155,7 +155,7 @@ export function listCafePosts(sp: URLSearchParams, userId = "", excludedBoards: 
     const page = Number.isSafeInteger(rawPage) && rawPage > 0 ? Math.min(rawPage, 10000) : 1;
     const order = sp.get("sort") === "popular" ? "like_count DESC, comment_count DESC, p.id DESC" : "p.id DESC";
     // 최근 본 글은 고정·노출과 상관없이 마지막으로 본 순서대로 보여준다.
-    const orderBy = scope === "recent" ? "(SELECT r.viewed_at FROM cafe_recent r WHERE r.post_id=p.id AND r.user_id=?) DESC, p.id DESC" : `p.pinned DESC,CASE WHEN p.sponsored_until>datetime('now') THEN 1 ELSE 0 END DESC, ${order}`;
+    const orderBy = scope === "recent" ? "(SELECT r.viewed_at FROM cafe_recent r WHERE r.post_id=p.id AND r.user_id=?) DESC, p.id DESC" : `p.pinned DESC,CASE WHEN p.sponsored_until>datetime('now') AND p.status='open' THEN 1 ELSE 0 END DESC, ${order}`;
     if (scope === "recent")
         args.push(userId);
     const rows = db.prepare(`${SELECT} WHERE ${conditions.join(" AND ")} ORDER BY ${orderBy} LIMIT 21 OFFSET ?`).all(...args, (page - 1) * 20);

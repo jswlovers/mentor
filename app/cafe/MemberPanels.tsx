@@ -9,6 +9,7 @@ export default function MemberPanels({section,data,me,run,busy,thread,setThread,
  const items=data.items||[];
  return <>
   {section==='admin'&&me?.isAdmin&&<form onSubmit={submit(run,'ad-settings')} className={card+' space-y-3'}><h2 className="font-bold">추천 노출 심사비 설정</h2><Field name="coins" label="심사비 (코인, 0이면 무료)" type="number" value={0}/><button disabled={busy} className={button}>요금 저장</button></form>}
+  {section==='admin'&&me?.isAdmin&&<form onSubmit={submit(run,'job-boost-settings')} className={card+' space-y-3'}><h2 className="font-bold">채용공고 상단 노출 요금</h2><p className="text-xs text-muted">공고 작성자가 3·7·14·30일 중 골라 코인으로 바로 결제해요. 결제 금액은 하루 요금 × 기간.</p><Field name="coins" label="하루 요금 (코인, 0이면 무료)" type="number" value={data.boostPerDay??2000}/><button disabled={busy} className={button}>요금 저장</button></form>}
   {section==='recent'&&items.map(i=><Link key={i.id} href={`/cafe/posts/${i.id}`} className={card+' block'}>{i.title}</Link>)}
   {['members','resumes'].includes(section)&&<div className="grid gap-3 sm:grid-cols-2">{items.map((i,index)=><article key={i.id} className={card}><h2 className="font-bold">{section==='members'?`${index+1}. `:''}{i.name}</h2><p className="mt-1 text-xs text-rose-300">{['새내기','정회원','우수회원'][i.grade||0]} · 공개 글 {i.posts||0} · 출석 {i.attendance||0}일</p>{i.bio&&<p className="mt-3 whitespace-pre-wrap text-sm">{i.bio}</p>}{i.skills&&<p className="mt-2 text-sm text-muted">{i.region} · {i.skills} · 경력 {i.years}년 · {i.desired_job}</p>}</article>)}</div>}
   {section==='profile'&&data.profile&&<>

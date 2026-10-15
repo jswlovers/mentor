@@ -125,7 +125,14 @@ export type CafePost = {
     views?: number;
     attachments?: {id:number;name:string;mime:string;url:string}[];
     masked?: boolean;
+    sponsored_until?: string | null;
 };
+// 채용공고 상단 노출: 코인으로 고를 수 있는 기간(일)
+export const JOB_BOOST_DAYS = [3, 7, 14, 30] as const;
+// sponsored_until은 SQLite datetime(UTC, "YYYY-MM-DD HH:MM:SS")으로 저장된다.
+const utc = (at: string) => new Date(at.replace(" ", "T") + "Z");
+export const isSponsored = (post: { sponsored_until?: string | null }) => !!post.sponsored_until && utc(post.sponsored_until) > new Date();
+export const sponsoredLabel = (at: string) => utc(at).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" });
 export type CafeComment = {
     id: number;
     author_id: string;

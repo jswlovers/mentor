@@ -41,6 +41,10 @@ try{db.exec("ALTER TABLE cafe_applications ADD COLUMN interview_at TEXT");}catch
 try{db.exec("ALTER TABLE cafe_applications ADD COLUMN viewed_at TEXT");}catch{}
 export function promotionFee(){const row=db.prepare("SELECT value FROM settings WHERE key='cafe_promotion_coins'").get() as {value:string}|undefined;const n=Number(row?.value||0);return Number.isSafeInteger(n)&&n>=0&&n<=1000000?n:0;}
 
+// 채용공고 상단 노출 하루 요금(코인). 관리자가 라운지 운영에서 바꾼다.
+export const JOB_BOOST_DEFAULT_PER_DAY=2000;
+export function jobBoostPerDay(){const row=db.prepare("SELECT value FROM settings WHERE key='job_boost_coins_per_day'").get() as {value:string}|undefined;const n=Number(row?.value??JOB_BOOST_DEFAULT_PER_DAY);return Number.isSafeInteger(n)&&n>=0&&n<=1000000?n:JOB_BOOST_DEFAULT_PER_DAY;}
+
 export class CafeServiceError extends Error {
   constructor(message: string, public status=400) { super(message); }
 }

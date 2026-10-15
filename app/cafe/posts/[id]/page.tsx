@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { api, jsonInit, timeAgo, useMe } from "@/lib/client";
-import { detailLabel, findCafeBoard, type CafePost, type CafeComment, type CafeDetails } from "@/lib/cafe";
+import { detailLabel, findCafeBoard, isSponsored, type CafePost, type CafeComment, type CafeDetails } from "@/lib/cafe";
 import CafeEditor from "../../CafeEditor";
 import PostServices from "../../PostServices";
 const button = "rounded-xl border border-border px-4 py-2 text-sm transition hover:border-rose-400/40 disabled:opacity-40";
@@ -65,7 +65,7 @@ export default function CafePostPage() {
     return <div className="space-y-5 px-6 py-8 md:px-10"><Link href="/cafe#feed" className="text-sm text-rose-400">← 라운지 게시판</Link>
     {editing ? <><h1 className="text-2xl font-bold">글 수정</h1><CafeEditor post={post} onSaved={() => { setEditing(false); load(); }}/></> : <>
       <article className="rounded-2xl border border-border bg-surface p-5 md:p-8">
-        <div className="flex gap-2 text-xs text-rose-300"><span>{board?.name}</span>{!!post.pinned && <span>· 상단 고정</span>}{(board?.listing || post.board === "poll") && <span className={post.status === "closed" ? "text-muted" : "text-emerald-300"}>· {post.status === "closed" ? "마감" : "진행 중"}</span>}</div>
+        <div className="flex gap-2 text-xs text-rose-300"><span>{board?.name}</span>{!!post.pinned && <span>· 상단 고정</span>}{isSponsored(post) && post.status === "open" && <span className="text-amber-300">· 상단 노출</span>}{(board?.listing || post.board === "poll") && <span className={post.status === "closed" ? "text-muted" : "text-emerald-300"}>· {post.status === "closed" ? "마감" : "진행 중"}</span>}</div>
         <h1 className="mt-3 break-words text-2xl font-bold">{post.title}</h1><p className="mt-3 text-xs text-muted">{post.author_name} · {timeAgo(post.created_at)} · 조회 {post.views||0}{post.updated_at !== post.created_at ? " · 수정됨" : ""}</p>
         {Object.entries(post.details).some(([key,value]) => key !== "url" && Boolean(value)) && <dl className="mt-5 grid gap-3 rounded-xl bg-surface-2 p-4 text-sm sm:grid-cols-2">{(Object.entries(post.details) as [
             keyof CafeDetails,

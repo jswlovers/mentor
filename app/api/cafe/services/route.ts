@@ -1,15 +1,15 @@
 import { db } from "@/lib/server/db";
 import { getUser, limited, unauthorized } from "@/lib/server/http";
 import { cafeJson, cafeError } from "@/lib/server/cafe";
-import { canHire, findCafeBoard, jobSide } from "@/lib/cafe";
+import { JOB_BOOST_DAYS, canHire, findCafeBoard, jobSide } from "@/lib/cafe";
 import { notify } from "@/lib/server/notify";
-import { ACTIVE_APPLICATION, CafeServiceError, kstMinute, boardAccess, ensureProfile, getResume, interviewLabel, interviewTime, isSeekPost, jobApplication, jobRights, getServicePost, saveResume, integer, matchScore, must, notifyOwner, profile, promotionFee, saveProfile, textField, transaction } from "@/lib/server/cafeServices";
+import { ACTIVE_APPLICATION, CafeServiceError, kstMinute, boardAccess, ensureProfile, getResume, interviewLabel, interviewTime, isSeekPost, jobApplication, jobRights, getServicePost, jobBoostPerDay, saveResume, integer, matchScore, must, notifyOwner, profile, promotionFee, saveProfile, textField, transaction } from "@/lib/server/cafeServices";
 import { debitCoins,refundFromRevenue,InsufficientCoinsError } from '@/lib/server/coins';
 
 export async function GET(req:Request) {
  const user=getUser(req), sp=new URL(req.url).searchParams, area=sp.get("area")||"members";
  try {
-  if(area==='promotion')return cafeJson({coins:promotionFee(),days:7});
+  if(area==='promotion')return cafeJson({coins:promotionFee(),days:7,boostPerDay:jobBoostPerDay(),boostDays:JOB_BOOST_DAYS});
   // 구인구직 지도: 진행 중인 공고 수를 시·도/시·군·구별로 센다
   if(area==='job-map'){const side=sp.get('side')==='seek'?'%구직':'%채용';return cafeJson({items:db.prepare("SELECT json_extract(details,'$.region') AS region,json_extract(details,'$.district') AS district,COUNT(*) AS n FROM cafe_posts WHERE board='jobs' AND status='open' AND deleted_at IS NULL AND json_extract(details,'$.kind') LIKE ? GROUP BY 1,2").all(side)});}
   if(area==="members") {
@@ -48,7 +48,7 @@ export async function GET(req:Request) {
   }
   if(area==="admin") {
    must(user.isAdmin,"관리자만 이용할 수 있어요",403);
-   return cafeJson({grades:db.prepare("SELECT g.*,u.name FROM cafe_grade_requests g JOIN users u ON u.id=g.user_id WHERE status='pending' ORDER BY id").all(),ads:db.prepare("SELECT a.*,p.title,u.name FROM cafe_ad_requests a JOIN cafe_posts p ON p.id=a.post_id JOIN users u ON u.id=a.user_id WHERE a.status='pending' ORDER BY a.id").all(),reports:db.prepare("SELECT r.*,p.title FROM cafe_reports r JOIN cafe_posts p ON p.id=r.post_id WHERE p.deleted_at IS NULL ORDER BY r.created_at DESC LIMIT 100").all()});
+   return cafeJson({boostPerDay:jobBoostPerDay(),grades:db.prepare("SELECT g.*,u.name FROM cafe_grade_requests g JOIN users u ON u.id=g.user_id WHERE status='pending' ORDER BY id").all(),ads:db.prepare("SELECT a.*,p.title,u.name FROM cafe_ad_requests a JOIN cafe_posts p ON p.id=a.post_id JOIN users u ON u.id=a.user_id WHERE a.status='pending' ORDER BY a.id").all(),reports:db.prepare("SELECT r.*,p.title FROM cafe_reports r JOIN cafe_posts p ON p.id=r.post_id WHERE p.deleted_at IS NULL ORDER BY r.created_at DESC LIMIT 100").all()});
   }
   return cafeError("존재하지 않는 메뉴예요",404);
  }catch(e){return cafeError((e as Error).message,e instanceof CafeServiceError?e.status:500);}
@@ -131,6 +131,16 @@ export async function POST(req:Request) {
    const post=getServicePost(integer(value.postId,1,1e10,"설문 번호"));must(post.board==='poll'&&post.status==='open',"진행 중인 설문이 아니에요",409);must(db.prepare("SELECT 1 FROM cafe_poll_options WHERE id=? AND post_id=?").get(integer(value.optionId,1,1e10,"선택지"),post.id),"설문 선택지를 확인해주세요");db.prepare("INSERT INTO cafe_poll_votes(post_id,user_id,option_id) VALUES(?,?,?) ON CONFLICT(post_id,user_id) DO UPDATE SET option_id=excluded.option_id").run(post.id,user.id,value.optionId);
   } else if(value.action==="ad-settings") {
    must(user.isAdmin,"관리자만 변경할 수 있어요",403);const fee=integer(value.coins,0,1000000,"노출 심사 코인");db.prepare("INSERT INTO settings(key,value,updated_by) VALUES('cafe_promotion_coins',?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_by=excluded.updated_by,updated_at=datetime('now')").run(String(fee),user.id);
+  } else if(value.action==="job-boost-settings") {
+   must(user.isAdmin,"관리자만 변경할 수 있어요",403);const fee=integer(value.coins,0,1000000,"상단 노출 하루 코인");db.prepare("INSERT INTO settings(key,value,updated_by) VALUES('job_boost_coins_per_day',?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_by=excluded.updated_by,updated_at=datetime('now')").run(String(fee),user.id);
+  } else if(value.action==="job-boost") {
+   // 채용공고 상단 노출: 코인을 내면 심사 없이 바로 기간만큼 상단에 뜬다. 노출 중이면 남은 기간 뒤에 이어 붙인다.
+   const until=transaction(()=>{const post=getServicePost(integer(value.postId,1,1e10,"글 번호"));must(post.author_id===user.id,"본인 공고만 상단 노출할 수 있어요",403);must(post.board==='jobs'&&!isSeekPost(post),"채용공고만 상단 노출할 수 있어요");must(post.status==='open',"마감된 공고는 상단 노출할 수 없어요",409);
+    const days=Number(value.days);must((JOB_BOOST_DAYS as readonly number[]).includes(days),"노출 기간을 다시 골라주세요");const fee=jobBoostPerDay()*days;must(Number(value.coins)===fee,"노출 요금이 변경됐어요. 다시 확인해주세요",409);must(!fee||value.acceptFee===true,"코인 사용에 동의해주세요");
+    if(fee)debitCoins(user.id,fee,'job_boost',`채용공고 #${post.id} 상단 노출 ${days}일`);
+    db.prepare("UPDATE cafe_posts SET sponsored_until=datetime(CASE WHEN sponsored_until>datetime('now') THEN sponsored_until ELSE datetime('now') END,?) WHERE id=?").run(`+${days} days`,post.id);
+    return (db.prepare("SELECT sponsored_until FROM cafe_posts WHERE id=?").get(post.id) as {sponsored_until:string}).sponsored_until;});
+   return cafeJson({ok:true,sponsored_until:until});
   } else if(value.action==="ad-request") {
    transaction(()=>{const post=getServicePost(integer(value.postId,1,1e10,"글 번호"));must(post.author_id===user.id,"본인 글만 노출 신청할 수 있어요",403);must(post.board!=='anonymous',"익명글은 노출 신청할 수 없어요");must(!db.prepare("SELECT 1 FROM cafe_ad_requests WHERE post_id=? AND status='pending'").get(post.id),"심사 중인 신청이 있어요",409);const fee=promotionFee();must(Number(value.coins)===fee,"심사비가 변경됐어요. 다시 확인해주세요",409);must(!fee||value.acceptFee===true,"코인 사용에 동의해주세요");const message=textField(value.message,"노출 신청 설명");if(fee)debitCoins(user.id,fee,'cafe_promotion',`라운지 글 #${post.id} 노출 신청`);db.prepare("INSERT INTO cafe_ad_requests(user_id,post_id,message,coins) VALUES(?,?,?,?)").run(user.id,post.id,message,fee);});
   } else if(value.action==="ad-review") {

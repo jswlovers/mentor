@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { api, timeAgo } from "@/lib/client";
-import { type CafePost } from "@/lib/cafe";
+import { isSponsored, type CafePost } from "@/lib/cafe";
 import { CITY_DISTRICTS, REGION_TILES } from "@/lib/regions";
 
 type Side = "hire" | "seek";
@@ -55,8 +55,8 @@ export default function JobsBoard({ initialSide }: { initialSide: Side }) {
             <section aria-labelledby="list-title" className="min-w-0">
                 <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 id="list-title" className="font-bold">{place} · {side === "hire" ? "구인 공고" : "구직 글"}</h2><label className="mt-1 flex items-center gap-2 text-xs text-muted"><input type="checkbox" checked={openOnly} onChange={e => { setOpenOnly(e.target.checked); setPage(1); }} />마감된 글 제외</label></div><Link href="/cafe/write?board=jobs" className="rounded-xl bg-rose-500 px-5 py-2.5 text-sm font-bold text-white">{side === "hire" ? "구인 공고 올리기" : "구직 글 올리기"}</Link></div>
                 <div aria-live="polite" className="mt-4">{error ? <p role="alert" className="rounded-xl border border-border p-6 text-sm text-rose-300">{error}</p> : !result ? <p className="p-8 text-center text-sm text-muted">불러오는 중…</p> : result.items.length === 0 ? <p className="rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted">{place}에 {side === "hire" ? "구인 공고" : "구직 글"}가 아직 없어요.</p> :
-                    <ul className="space-y-2">{result.items.map(p => { const d = p.details; const facts = side === "hire" ? [d.salon, d.role, d.price, d.hours] : [d.role, d.career, d.price && `희망 ${d.price}`, d.hours]; return <li key={p.id}><Link href={`/cafe/posts/${p.id}`} className="block rounded-2xl border border-border bg-surface p-4 transition hover:border-rose-400/40">
-                        <div className="flex flex-wrap items-center gap-2 text-[11px]"><span className="rounded-full bg-rose-500/15 px-2 py-0.5 font-semibold text-rose-300">{d.kind}</span><span className="text-muted">{d.region} {d.district}</span>{p.status === "closed" && <span className="text-muted">· 마감</span>}{d.deadline && p.status !== "closed" && <span className="text-amber-300">· {d.deadline} 마감</span>}</div>
+                    <ul className="space-y-2">{result.items.map(p => { const d = p.details; const boosted = isSponsored(p) && p.status === "open", facts = side === "hire" ? [d.salon, d.role, d.price, d.hours] : [d.role, d.career, d.price && `희망 ${d.price}`, d.hours]; return <li key={p.id}><Link href={`/cafe/posts/${p.id}`} className={`block rounded-2xl border p-4 transition hover:border-rose-400/40 ${boosted ? "border-amber-400/40 bg-amber-500/5" : "border-border bg-surface"}`}>
+                        <div className="flex flex-wrap items-center gap-2 text-[11px]">{boosted && <span className="rounded-full bg-amber-500/15 px-2 py-0.5 font-semibold text-amber-300">상단 노출</span>}<span className="rounded-full bg-rose-500/15 px-2 py-0.5 font-semibold text-rose-300">{d.kind}</span><span className="text-muted">{d.region} {d.district}</span>{p.status === "closed" && <span className="text-muted">· 마감</span>}{d.deadline && p.status !== "closed" && <span className="text-amber-300">· {d.deadline} 마감</span>}</div>
                         <h3 className="mt-2 break-words font-bold">{p.title}</h3>
                         <p className="mt-1.5 text-sm text-muted">{facts.filter(Boolean).join(" · ")}</p>
                         <p className="mt-2 text-[11px] text-muted">{p.author_name} · {timeAgo(p.created_at)} · 조회 {p.views || 0}</p>

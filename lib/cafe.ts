@@ -16,18 +16,18 @@ export const CAFE_BOARDS = [
     { slug: "event", name: "이벤트·나눔", description: "미용인 행사와 나눔 소식", group: "모집·거래", listing: true },
     { slug: "notice", name: "공지사항", description: "라운지 운영 안내", group: "소통", listing: false },
     { slug: "anonymous", name: "익명 고민", description: "닉네임을 공개하지 않고 나누는 이야기", group: "소통", listing: false },
-    { slug: "question", name: "미용 질문·답변", description: "기술 질문과 동료의 해결 경험", group: "기술·교육", listing: false },
+    { slug: "question", name: "질문·답변", description: "기술 질문과 동료의 해결 경험", group: "기술·교육", listing: false },
     { slug: "poll", name: "미용 설문", description: "동료들의 의견을 모아요", group: "소통", listing: false },
     { slug: "humor", name: "좋은글·유머", description: "동료들과 웃고 쉬어가는 공간", group: "소통", listing: false },
     { slug: "congrats", name: "축하해주세요", description: "기쁜 소식을 나눠요", group: "소통", listing: false },
     { slug: "suggestion", name: "운영진 건의", description: "라운지 운영에 관한 제안", group: "소통", listing: false },
-    { slug: "cut", name: "커트 교육", description: "커트 자료와 시술 노하우", group: "기술·교육", listing: false },
+    { slug: "cut", name: "커트", description: "커트 자료와 시술 노하우", group: "기술·교육", listing: false },
     { slug: "perm", name: "펌·아이롱펌", description: "펌 시술과 복구 노하우", group: "기술·교육", listing: false },
     { slug: "color", name: "염색·탈색", description: "염색 레시피와 컬러 교육", group: "기술·교육", listing: false },
     { slug: "upstyle", name: "드라이·업스타일", description: "스타일링과 특수머리 자료", group: "기술·교육", listing: false },
-    { slug: "scalp", name: "두피·모발 관리", description: "두피와 클리닉 자료", group: "기술·교육", listing: false },
-    { slug: "video", name: "동영상 교육", description: "교육 영상과 설명을 공유해요", group: "기술·교육", listing: false },
-    { slug: "basics", name: "미용 기초·공부방", description: "기초상식과 나의 노하우", group: "기술·교육", listing: false },
+    { slug: "scalp", name: "두피·모발", description: "두피와 클리닉 자료", group: "기술·교육", listing: false },
+    { slug: "video", name: "교육 영상", description: "교육 영상과 설명을 공유해요", group: "기술·교육", listing: false },
+    { slug: "basics", name: "기초 공부", description: "기초상식과 나의 노하우", group: "기술·교육", listing: false },
     { slug: "complaint", name: "고민·클레임 상담", description: "고객 응대와 시술 고민 상담", group: "매장·정보", listing: false },
     { slug: "tax", name: "세무·운영 자료", description: "세무 상식과 매장 운영 자료", group: "매장·정보", listing: false },
     { slug: "promotion", name: "매장 소개·홍보", description: "내 매장 소개와 마케팅 사례", group: "매장·정보", listing: false },
@@ -40,6 +40,23 @@ export const CAFE_BOARDS = [
     { slug: "vip", name: "우수회원 자료방", description: "우수회원의 제품 레시피와 자료", group: "회원 공간", listing: false },
     { slug: "staff", name: "운영진 자료방", description: "관리자 운영 자료", group: "회원 공간", listing: false },
 ] as const;
+// 비슷한 게시판을 하나의 주제로 묶어 메뉴를 간결하게 보여준다. 게시판·글 데이터는 그대로이고 화면에서만 묶는다.
+export const CAFE_TOPICS = [
+    { slug: "technique", name: "시술 노하우", description: "커트·펌·염색·스타일링·두피 자료와 시술 레시피", boards: ["cut", "perm", "color", "upstyle", "scalp", "recipe"] },
+    { slug: "study", name: "질문·공부", description: "기술 질문과 기초 공부", boards: ["question", "basics"] },
+    { slug: "learning", name: "교육·후기", description: "교육·세미나 모집, 교육 영상, 교육·제품 후기", boards: ["education", "video", "review"] },
+] as const;
+export const findCafeTopic = (slug: string) => CAFE_TOPICS.find((topic) => topic.slug === slug);
+export const boardTopic = (board: string) => CAFE_TOPICS.find((topic) => (topic.boards as readonly string[]).includes(board));
+// 분류 메뉴에 보일 항목: 주제로 묶인 게시판은 주제 하나로, 나머지는 게시판 그대로.
+export const groupEntries = (group: string) => {
+    const seen = new Set<string>(), entries: { slug: string; name: string; topic: boolean }[] = [];
+    for (const board of CAFE_BOARDS.filter((b) => b.group === group)) {
+        const topic = boardTopic(board.slug), slug = topic ? topic.slug : board.slug;
+        if (!seen.has(slug)) { seen.add(slug); entries.push({ slug, name: topic ? topic.name : board.name, topic: !!topic }); }
+    }
+    return entries;
+};
 export type CafeBoard = (typeof CAFE_BOARDS)[number]["slug"];
 export const findCafeBoard = (slug: string) => CAFE_BOARDS.find((board) => board.slug === slug);
 export const CAFE_REGIONS = ["서울", "경기", "인천", "부산", "대구", "광주", "대전", "울산", "세종", "강원", "충북", "충남", "전북", "전남", "경북", "경남", "제주", "온라인"] as const;

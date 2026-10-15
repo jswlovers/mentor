@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api, jsonInit, useMe } from "@/lib/client";
 import { CITIES, CITY_DISTRICTS } from "@/lib/regions";
-import { CAFE_BOARDS, CAFE_REGIONS, CAFE_KINDS, EMPTY_CAFE_DETAILS, JOB_FIELDS, JOB_REQUIRED, JOB_ROLES, JOB_RULE_TEXT, allowedJobKinds, canHire, detailLabel, findCafeBoard, jobSide, type CafeDetails, type CafePost, type JobRights } from "@/lib/cafe";
+import { CAFE_BOARDS, CAFE_REGIONS, boardTopic, groupEntries, CAFE_KINDS, EMPTY_CAFE_DETAILS, JOB_FIELDS, JOB_REQUIRED, JOB_ROLES, JOB_RULE_TEXT, allowedJobKinds, canHire, detailLabel, findCafeBoard, jobSide, type CafeDetails, type CafePost, type JobRights } from "@/lib/cafe";
 const input = "mt-1 w-full rounded-xl border border-border bg-surface-2 px-3 py-2.5 text-sm text-foreground";
 export default function CafeEditor({ initialBoard = "talk", post, onSaved }: {
     initialBoard?: string;
@@ -79,7 +79,7 @@ export default function CafeEditor({ initialBoard = "talk", post, onSaved }: {
     if (board === "notice" && !me.isAdmin)
         return <div className="p-8 text-muted">공지사항은 관리자만 작성할 수 있어요. <Link href="/cafe/write" className="text-rose-300 underline">다른 게시판에 글쓰기</Link></div>;
     return <form onSubmit={submit} className="space-y-5 rounded-2xl border border-border bg-surface p-5 md:p-7">
-    <label className="block text-sm font-semibold">게시판<select disabled={!!post} value={board} onChange={e => { setBoard(e.target.value as typeof board); setDetails({ ...EMPTY_CAFE_DETAILS }); }} className={input}>{CAFE_BOARDS.filter(b => b.slug !== "notice" || me.isAdmin).map(b => <option key={b.slug} value={b.slug}>{b.name}</option>)}</select></label><p className="text-xs text-muted">{selected.description}</p>
+    <label className="block text-sm font-semibold">게시판<select disabled={!!post} value={board} onChange={e => { setBoard(e.target.value as typeof board); setDetails({ ...EMPTY_CAFE_DETAILS }); }} className={input}>{[...new Set(CAFE_BOARDS.map(b => b.group))].map(g => <optgroup key={g} label={g}>{CAFE_BOARDS.filter(b => b.group === g && (b.slug !== "notice" || me.isAdmin)).sort((x, y) => { const order = groupEntries(g).map(e => e.slug), at = (slug: string) => order.indexOf(boardTopic(slug)?.slug ?? slug); return at(x.slug) - at(y.slug); }).map(b => { const topic = boardTopic(b.slug); return <option key={b.slug} value={b.slug}>{topic ? `${topic.name} › ${b.name}` : b.name}</option>; })}</optgroup>)}</select></label><p className="text-xs text-muted">{selected.description}</p>
     <label className="block text-sm font-semibold">제목<input required maxLength={100} value={title} onChange={e => setTitle(e.target.value)} className={input}/></label>
     {board === "poll" && !post && <label className="block text-sm font-semibold">설문 선택지 (한 줄에 하나, 2~8개)<textarea required rows={5} value={pollOptions} onChange={e=>setPollOptions(e.target.value)} className={input}/></label>}
     {kinds && <label className="block text-sm font-semibold">유형<select required value={details.kind} onChange={e => { const kind = e.target.value; setDetails(d => board === "jobs" && jobSide(kind) !== jobSide(d.kind) ? { ...EMPTY_CAFE_DETAILS, region: d.region, kind } : { ...d, kind }); }} className={input}><option value="">선택해주세요</option>{kinds.map(kind => <option key={kind}>{kind}</option>)}</select></label>}

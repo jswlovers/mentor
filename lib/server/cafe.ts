@@ -1,7 +1,7 @@
 import path from "node:path";
 import { CITY_DISTRICTS } from "../regions";
 import { DATA_DIR, db } from "./db";
-import { CAFE_BOARDS, CAFE_REGIONS, CAFE_KINDS, EMPTY_CAFE_DETAILS, JOB_REQUIRED, JOB_ROLES, detailLabel, findCafeBoard, jobSide, type CafeDetails, type CafePost } from "../cafe";
+import { CAFE_BOARDS, CAFE_REGIONS, CAFE_KINDS, EMPTY_CAFE_DETAILS, JOB_REQUIRED, JOB_ROLES, detailLabel, findCafeBoard, findCafeTopic, jobSide, type CafeDetails, type CafePost } from "../cafe";
 db.exec(`
   CREATE TABLE IF NOT EXISTS cafe_posts (
     id INTEGER PRIMARY KEY AUTOINCREMENT, board TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL,
@@ -103,6 +103,15 @@ export function listCafePosts(sp: URLSearchParams, userId = "", excludedBoards: 
             throw new Error("존재하지 않는 분류예요");
         conditions.push(`p.board IN (${slugs.map(() => "?").join(",")})`);
         args.push(...slugs);
+    }
+    // 주제(시술 노하우 등)로 묶인 게시판 함께 보기
+    const topic = sp.get("topic");
+    if (topic && board === "all") {
+        const found = findCafeTopic(topic);
+        if (!found)
+            throw new Error("존재하지 않는 주제예요");
+        conditions.push(`p.board IN (${found.boards.map(() => "?").join(",")})`);
+        args.push(...found.boards);
     }
     const q = (sp.get("q") || "").trim().slice(0, 100);
     if (q) {

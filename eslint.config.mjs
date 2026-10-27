@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // 하위 별도 앱(자체 package.json·설정 사용)
+    "FisheryLink/**",
   ]),
 ]);
 

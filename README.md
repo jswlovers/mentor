@@ -50,10 +50,6 @@ npm run backup                 # 지금 바로 백업 (서버는 BACKUP_INTERVAL
 | `scripts/` | 관리자 지정, 시드, 통합 테스트(`e2e*.mjs`), 매뉴얼 PDF 빌드 |
 | `data/` | SQLite DB와 업로드 (git 제외) |
 
-## 하위 앱
-
-- [FisheryLink/](FisheryLink/README.md): 같은 플랫폼을 복제한 수협 조합원 어업 자문 서비스 (별도 `package.json`·DB). 이 앱의 `tsconfig.json`·`eslint.config.mjs`는 `FisheryLink/`를 제외합니다.
-
 ## 테스트
 
 통합 테스트는 운영 DB를 오염시키지 않도록 **별도 `DATA_DIR`로 띄운 서버**에서만 실행하세요.

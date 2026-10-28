@@ -38,11 +38,10 @@ export const COST_PER_SEC = { voice: 10, video: 100 } as const;
  * 관리자는 초기 세팅용으로 등급을 직접 정할 수 있다. 상담 시작비와 통화 단가에 등급별 가산율(plusPct)이 붙는다.
  * 가산된 금액도 같은 수수료율로 정산되므로 등급이 오르면 전문가 수익도 그만큼 는다.
  */
+// 지금은 일반 전문가와 마스터 두 단계뿐이다. 마스터는 실적 기준을 높게 잡아 쉽게 오르지 못하게 했다.
 export const EXPERT_GRADES = [
   { label: "전문가", plusPct: 0, minSolved: 0, minRating: 0, minReviews: 0 },
-  { label: "시니어", plusPct: 20, minSolved: 20, minRating: 4.5, minReviews: 10 },
-  { label: "마스터", plusPct: 40, minSolved: 60, minRating: 4.7, minReviews: 30 },
-  { label: "그랜드 마스터", plusPct: 70, minSolved: 150, minRating: 4.8, minReviews: 80 },
+  { label: "마스터", plusPct: 40, minSolved: 100, minRating: 4.8, minReviews: 50 },
 ] as const;
 export const MAX_GRADE = EXPERT_GRADES.length - 1;
 export const isGrade = (v: unknown): v is number => Number.isInteger(v) && (v as number) >= 0 && (v as number) <= MAX_GRADE;

@@ -270,13 +270,13 @@ export default function Chat() {
                   </button>
                   {random && (
                     <div className="mt-2">
-                      <p className="mb-1 text-xs text-muted">원하는 전문가 등급 (이 등급 이상만 연결돼요)</p>
+                      <p className="mb-1 text-xs text-muted">연결할 전문가</p>
                       <div className="flex flex-wrap gap-1">
                         {EXPERT_GRADES.map((g, i) => {
                           const n = eligible.filter((x) => x.grade >= i).length;
                           return (
                             <button type="button" key={g.label} onClick={() => setMinGrade(i)} className={`rounded-full border px-2.5 py-1 text-xs ${minGrade === i ? "border-rose-500 bg-rose-500 text-white" : "border-border text-muted hover:text-foreground"}`}>
-                              {i === 0 ? "전체" : `${g.label} 이상`} {g.plusPct > 0 && <span className="opacity-80">+{g.plusPct}%</span>} <span className="opacity-60">· 지금 {n}명</span>
+                              {i === 0 ? "전체" : `${g.label}만`} {g.plusPct > 0 && <span className="opacity-80">+{g.plusPct}%</span>} <span className="opacity-60">· 지금 {n}명</span>
                             </button>
                           );
                         })}
@@ -315,7 +315,7 @@ export default function Chat() {
               )}
               {pickGone && <p className="mt-1.5 rounded-lg border border-amber-500/20 bg-amber-500/10 p-2 text-xs text-amber-300">{pick === GROUP ? "고른 전문가가 모두 지금은 쉬는 중이에요." : "고른 전문가가 지금은 쉬는 중이라 목록에 없어요."} 다른 전문가를 고르거나 랜덤 매칭으로 신청해주세요.</p>}
               {pick && pickOk && <p className="mt-1.5 text-xs text-muted">{pick === GROUP ? "고른 전문가들" : "고른 전문가"}에게 먼저 알리고, 5분 안에 아무도 참여하지 않으면 같은 등급 이상인 다른 온라인 전문가에게도 알려요.</p>}
-              {random && minGrade > 0 && eligible.every((x) => x.grade < minGrade) && <p className="mt-1.5 rounded-lg border border-amber-500/20 bg-amber-500/10 p-2 text-xs text-amber-300">지금 응대 가능한 {gradeOf(minGrade).label} 이상 전문가가 없어요. 신청하면 돌아올 때까지 기다리고, {AUTO_REFUND_MINUTES}분 안에 아무도 참여하지 않으면 전액 환불돼요.</p>}
+              {random && minGrade > 0 && eligible.every((x) => x.grade < minGrade) && <p className="mt-1.5 rounded-lg border border-amber-500/20 bg-amber-500/10 p-2 text-xs text-amber-300">지금 응대 가능한 {gradeOf(minGrade).label}가 없어요. 신청하면 돌아올 때까지 기다리고, {AUTO_REFUND_MINUTES}분 안에 아무도 참여하지 않으면 전액 환불돼요.</p>}
             </section>
 
             <div className="rounded-xl border border-border bg-surface p-4 text-sm">

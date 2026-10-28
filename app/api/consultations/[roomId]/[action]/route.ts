@@ -1,6 +1,7 @@
 import { cancelAndRefund, claimExpert, getConsultation, roleOf } from "@/lib/server/consult";
 import { getBalance } from "@/lib/server/coins";
 import { db } from "@/lib/server/db";
+import { refreshGrade } from "@/lib/server/grades";
 import { forbidden, getUser, unauthorized } from "@/lib/server/http";
 import { notify } from "@/lib/server/notify";
 
@@ -35,6 +36,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ roomId:
   if (action === "end") {
     if (roleOf(c, user) === "viewer") return forbidden();
     endStmt.run("ended", roomId);
+    refreshGrade(c.expert_id); // 해결 건수가 늘었으니 승급 조건을 다시 본다
     notify(user.id === c.asker_id ? c.expert_id : c.asker_id, `${user.name}님이 상담을 종료했어요`, `/chat/${roomId}`);
     return Response.json({ ok: true });
   }

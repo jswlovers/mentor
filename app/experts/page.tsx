@@ -8,7 +8,7 @@ import { TIER_KEYS, TIERS } from "@/lib/server/pricing";
 
 type E = {
   id: string; name: string; headline: string | null; bio: string; categories: string[]; specialist: boolean; available: boolean; offHours: string | null; salon: string | null; photoUrl: string | null;
-  years: number | null; licenseVerified: boolean; portfolioCount: number; isNew: boolean;
+  years: number | null; licenseVerified: boolean; portfolioCount: number; isNew: boolean; grade: number; gradeLabel: string; gradePlusPct: number;
   rating: number | null; reviewCount: number; consultations: number; medianResponseMinutes: number | null;
 };
 const SORTS = [["rating", "추천순"], ["responses", "상담 많은 순"], ["recent", "신규순"]] as const;
@@ -208,6 +208,7 @@ function Experts() {
               <div className="flex flex-wrap items-center gap-1.5">
                 <b>{e.name}</b>
                 <span className="rounded bg-rose-500/15 px-1.5 py-0.5 text-[11px] text-rose-300">검증 전문가</span>
+                {e.grade > 0 && <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[11px] font-semibold text-amber-300">{e.gradeLabel} · 상담비 +{e.gradePlusPct}%</span>}
                 {e.licenseVerified && <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[11px] text-emerald-300">면허 확인</span>}
                 {e.isNew && <span className="rounded bg-sky-500/15 px-1.5 py-0.5 text-[11px] text-sky-300">신규</span>}
                 <span className={`text-[11px] ${e.available ? "text-emerald-400" : "text-muted"}`}>{e.available ? "● 응대 가능" : "○ 쉬는 중"}</span>

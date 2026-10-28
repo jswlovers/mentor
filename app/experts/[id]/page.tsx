@@ -8,7 +8,7 @@ import Avatar from "../../components/Avatar";
 type Review = { id: number; asker_name: string; rating: number; comment: string | null; created_at: string; category: string | null };
 type P = {
   id: string; name: string; bio: string; headline: string | null; available: boolean; offHours: string | null; salon: string | null; photoUrl: string | null; categories: string[];
-  years: number | null; licenseVerified: boolean; medianResponseMinutes: number | null; reviewCount: number; rating: number | null; consultations: number; answers: number;
+  years: number | null; licenseVerified: boolean; grade: number; gradeLabel: string; gradePlusPct: number; medianResponseMinutes: number | null; reviewCount: number; rating: number | null; consultations: number; answers: number;
   portfolio: { id: number; caption: string | null; url: string }[];
   reviewCategories: { category: string; n: number }[];
   reviews: Review[]; reviewsHasMore: boolean;
@@ -59,6 +59,7 @@ export default function ExpertProfile() {
       <Avatar name={p.name} url={p.photoUrl} size={88} />
       <div className="min-w-0">
         <h1 className="text-lg font-bold">{p.name} <span className="rounded bg-rose-500/15 px-1.5 py-0.5 align-middle text-xs font-normal text-rose-300">검증 전문가</span>
+          {p.grade > 0 && <span className="ml-1 rounded bg-amber-500/15 px-1.5 py-0.5 align-middle text-xs font-semibold text-amber-300">{p.gradeLabel} · 상담비 +{p.gradePlusPct}%</span>}
           {p.licenseVerified && <span className="ml-1 rounded bg-emerald-500/15 px-1.5 py-0.5 align-middle text-xs font-normal text-emerald-300">면허 확인</span>}</h1>
         {(p.salon || p.years != null) && <p className="mt-0.5 text-sm text-foreground/80">{p.years != null && `경력 ${p.years}년`}{p.years != null && p.salon && " · "}{p.salon && `🏢 ${p.salon}`}</p>}
         <p className="mt-1 text-sm">

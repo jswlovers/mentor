@@ -33,6 +33,25 @@ export const MAX_MESSAGE_CHARS = 200; // 한 메시지는 200자 이내 (최대 
 
 /** 3. 통화 과금: 초당 단가. 보이스톡 10코인/초(분당 600), 페이스톡 100코인/초(분당 6,000) */
 export const COST_PER_SEC = { voice: 10, video: 100 } as const;
+/**
+ * 전문가 등급: 해결한 상담(종료된 상담) 수 · 평균 별점 · 후기 수가 모두 기준을 넘으면 자동으로 오른다(한 번 오르면 내려가지 않음).
+ * 관리자는 초기 세팅용으로 등급을 직접 정할 수 있다. 상담 시작비와 통화 단가에 등급별 가산율(plusPct)이 붙는다.
+ * 가산된 금액도 같은 수수료율로 정산되므로 등급이 오르면 전문가 수익도 그만큼 는다.
+ */
+export const EXPERT_GRADES = [
+  { label: "전문가", plusPct: 0, minSolved: 0, minRating: 0, minReviews: 0 },
+  { label: "시니어", plusPct: 20, minSolved: 20, minRating: 4.5, minReviews: 10 },
+  { label: "마스터", plusPct: 40, minSolved: 60, minRating: 4.7, minReviews: 30 },
+  { label: "그랜드 마스터", plusPct: 70, minSolved: 150, minRating: 4.8, minReviews: 80 },
+] as const;
+export const MAX_GRADE = EXPERT_GRADES.length - 1;
+export const isGrade = (v: unknown): v is number => Number.isInteger(v) && (v as number) >= 0 && (v as number) <= MAX_GRADE;
+export const gradeOf = (v: number | null | undefined) => EXPERT_GRADES[isGrade(v) ? v : 0];
+/** 등급 가산이 붙은 상담 시작비(100코인 단위 반올림) */
+export const gradeFee = (tier: Tier, grade: number) => Math.round((TIERS[tier].fee * (100 + gradeOf(grade).plusPct)) / 10_000) * 100;
+/** 등급 가산이 붙은 통화 초당 단가 */
+export const gradeCallRate = (type: keyof typeof COST_PER_SEC, grade: number) => Math.round((COST_PER_SEC[type] * (100 + gradeOf(grade).plusPct)) / 100);
+
 export const ENTRY_MIN_COINS = 3000; // 이 이하면 통화 시작/참여 불가
 export const CONTINUE_MIN_COINS = 1500; // 통화 중 이 이하로 떨어지면 강제 종료
 

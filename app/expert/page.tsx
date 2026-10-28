@@ -3,10 +3,11 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, CATEGORIES, jsonInit, useMe } from "@/lib/client";
 import ConsultAvailability from "./ConsultAvailability";
+import GradeCard, { type GradeInfo } from "./GradeCard";
 import Portfolio from "./Portfolio";
 
 type Earn = {
-  earnings: number; shares: { label: string; pct: number }[]; minWithdraw: number;
+  earnings: number; shares: { label: string; pct: number }[]; minWithdraw: number; grade: GradeInfo;
   ledger: { id: number; direction: "debit" | "credit"; amount: number; note: string | null; created_at: string }[];
   withdrawals: { id: number; amount: number; bank_info: string; status: string; admin_note: string | null; created_at: string }[];
 };
@@ -132,6 +133,7 @@ export default function Expert() {
   return (
     <div className="mx-auto max-w-xl space-y-5 px-6 py-8">
       {me.availability && <ConsultAvailability av={me.availability} />}
+      {data?.grade && <GradeCard g={data.grade} />}
       <section className="space-y-2 rounded-xl border border-border bg-surface p-4 text-sm">
         <h2 className="font-semibold">상담 호출 설정</h2>
         <p className="text-xs text-muted">질문자가 상담을 열면 담당 분야와 맞는 전문가에게 알림이 가요. 분야를 하나도 고르지 않으면 모든 분야 요청을 받아요. (시간당 최대 3건, 카카오톡은 08~23시에만)</p>

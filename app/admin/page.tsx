@@ -3,11 +3,13 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { api, jsonInit, notifyMeChanged, useMe, type AdminPending } from "@/lib/client";
+import { EXPERT_GRADES } from "@/lib/server/pricing";
 import ChargeCalendar from "./ChargeCalendar";
 
 type Overview = {
   charges: { id: number; amount_krw: number; status: string; created_at: string; user_name: string; depositor: string | null }[];
-  experts: { id: string; username: string; name: string; expert_status: string; expert_bio: string | null; expert_years: number | null; expert_salon: string | null; expert_license_no: string | null; has_license: number }[];
+  experts: { id: string; username: string; name: string; expert_status: string; expert_bio: string | null; expert_years: number | null; expert_salon: string | null; expert_license_no: string | null; has_license: number;
+    expert_grade: number; solved: number; review_count: number; rating: number | null }[];
   withdrawals: { id: number; amount: number; bank_info: string; status: string; created_at: string; user_name: string }[];
   tickets: { id: number; category: string; subject: string; body: string; status: string; user_name: string; target_name: string | null; created_at: string }[];
   users: { id: string; username: string; name: string; role: string; expert_status: string; suspended_at: string | null }[];
@@ -109,6 +111,15 @@ function Admin() {
               경력 {x.expert_years ?? "미입력"}{x.expert_years !== null ? "년" : ""} · 살롱 {x.expert_salon ?? "미입력"} · 면허번호 {x.expert_license_no ?? "미입력"} ·{" "}
               {x.has_license ? <a href={`/api/admin/experts/${x.id}/license`} target="_blank" rel="noreferrer" className="font-semibold text-rose-400 underline">면허증 보기</a> : <span className="text-amber-300">면허증 없음(이전 방식 신청)</span>}
             </p>
+            {x.expert_status === "approved" && (
+              <p className="flex flex-wrap items-center gap-2 text-xs text-muted">
+                <span>등급</span>
+                <select value={x.expert_grade} onChange={(e) => confirm(`${x.name}님을 ${EXPERT_GRADES[Number(e.target.value)].label} 등급으로 정할까요?`) && act(`/api/admin/experts/${x.id}/grade`, { grade: Number(e.target.value) })} className="rounded border border-border bg-surface px-1 py-0.5 text-foreground">
+                  {EXPERT_GRADES.map((g, i) => <option key={g.label} value={i}>{g.label}{g.plusPct ? ` (+${g.plusPct}%)` : ""}</option>)}
+                </select>
+                <span>실적: 해결 {x.solved}건 · 후기 {x.review_count}개 · 평점 {x.rating ?? "-"}</span>
+              </p>
+            )}
             <p className="whitespace-pre-wrap text-xs text-muted">{x.expert_bio}</p>
           </li>
         ))}

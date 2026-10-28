@@ -5,8 +5,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api, jsonInit, useMe, won } from "@/lib/client";
 import Avatar from "../../components/Avatar";
 import {
-  ATTACHMENT_COST, AUTO_REFUND_MINUTES, COST_PER_SEC, DEFAULT_TIER, MAX_MESSAGE_CHARS, MAX_VIDEO_BYTES,
-  MESSAGE_PER_CHAR, messageCost, type Tier, TIER_KEYS, TIERS,
+  ATTACHMENT_COST, AUTO_REFUND_MINUTES, DEFAULT_TIER, MAX_MESSAGE_CHARS, MAX_VIDEO_BYTES,
+  EXPERT_GRADES, gradeCallRate, gradeFee, gradeOf, MESSAGE_PER_CHAR, messageCost, type Tier, TIER_KEYS, TIERS,
 } from "@/lib/server/pricing";
 
 type Msg = {
@@ -16,11 +16,11 @@ type Msg = {
 type Status = {
   started: boolean; status: "open" | "ended" | "cancelled" | null; role: "asker" | "expert" | "viewer";
   canJoin: boolean; isQuestionOwner: boolean; category: string; expertName: string | null; expertId: string | null; reviewed: boolean; askerName: string | null; coins: number;
-  tier: Tier | null; fee: number | null; expertShare: number | null; deadline: string | null; preferredName: string | null; targetNames: string[];
+  tier: Tier | null; grade: number | null; fee: number | null; expertShare: number | null; deadline: string | null; preferredName: string | null; targetNames: string[];
 };
 type Expert = {
   id: string; name: string; headline: string | null; salon: string | null; photoUrl: string | null; rating: number | null; reviewCount: number; available: boolean;
-  consultations: number; medianResponseMinutes: number | null;
+  consultations: number; medianResponseMinutes: number | null; grade: number; gradeLabel: string; gradePlusPct: number;
 };
 
 /** 등급별로 답변에 담기는 것 */
@@ -29,6 +29,11 @@ const INCLUDES: Record<Tier, string[]> = {
   detail: ["글 답변", "사진·도식·자료 첨부"],
   premium: ["글 답변", "사진·도식·자료 첨부", "🎬 시연 영상"],
 };
+/** 전문가 등급 배지(기본 등급은 표시하지 않음) */
+function GradeBadge({ grade }: { grade: number }) {
+  if (!grade) return null;
+  return <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[11px] font-semibold text-amber-300">{gradeOf(grade).label}</span>;
+}
 const VIDEO_ACCEPT = "video/mp4,video/quicktime,video/webm";
 const PHOTO_ACCEPT = "image/jpeg,image/png,image/gif,image/webp,application/pdf,.doc,.docx,.xls,.xlsx,.txt,.zip";
 
@@ -55,7 +60,7 @@ function Attachment({ m }: { m: Msg }) {
     : <a href={m.attachment_url!} download={m.attachment_name ?? "file"} className="mt-1 block text-xs underline">📎 {m.attachment_name}</a>;
 }
 
-function CallPanel({ call, roomId, billed, onEnd }: { call: Call; roomId: string; billed: boolean; onEnd: (reason?: string) => void }) {
+function CallPanel({ call, roomId, billed, grade, onEnd }: { call: Call; roomId: string; billed: boolean; grade: number; onEnd: (reason?: string) => void }) {
   const [sec, setSec] = useState(0);
   const [coins, setCoins] = useState<number | null>(null);
   const ended = useRef(false);
@@ -76,7 +81,7 @@ function CallPanel({ call, roomId, billed, onEnd }: { call: Call; roomId: string
     return () => clearInterval(t);
   }, [call.type, call.url, roomId, onEnd, billed]);
 
-  const rate = COST_PER_SEC[call.type];
+  const rate = gradeCallRate(call.type, grade);
   return (
     <div className="fixed inset-0 z-20 mx-auto flex max-w-3xl flex-col bg-black">
       <iframe src={call.url} allow="camera; microphone; fullscreen; display-capture" className="flex-1 border-0" title="통화" />
@@ -105,6 +110,7 @@ export default function Chat() {
   const [experts, setExperts] = useState<Expert[]>([]);
   const [expertsLoaded, setExpertsLoaded] = useState(false);
   const [tierKey, setTierKey] = useState<Tier>(DEFAULT_TIER);
+  const [minGrade, setMinGrade] = useState(0); // 랜덤 매칭에서 원하는 최소 전문가 등급
   // 전문가 찾기에서 골라 온 전문가(?expert=)를 미리 선택해 둔다
   const search = useSearchParams();
   const presetExpert = search.get("expert");
@@ -213,6 +219,11 @@ export default function Chat() {
     const groupOnline = eligible.filter((x) => groupIds.includes(x.id)); // 고른 전문가 중 지금 온라인인 분
     const pickOk = !pick || (pick === GROUP ? groupOnline.length > 0 : eligible.some((x) => x.id === pick));
     const pickGone = expertsLoaded && !pickOk;
+    // 가격 등급: 전문가 지정이면 그 전문가의 등급, 여러 명이면 그중 가장 낮은 등급, 랜덤 매칭이면 고른 최소 등급
+    const pickedExpert = pickOk && pick && pick !== GROUP ? eligible.find((x) => x.id === pick) : undefined;
+    const priceGrade = pickOk && pick === GROUP ? Math.min(...groupOnline.map((x) => x.grade)) : pickedExpert ? pickedExpert.grade : minGrade;
+    const fee = gradeFee(tierKey, priceGrade);
+    const random = !pick || !pickOk;
     const pill = (on: boolean) => `rounded-xl border p-3 text-left transition ${on ? "border-rose-500 bg-rose-500/10" : "border-border bg-surface hover:border-white/20"}`;
     return (
       <div className="mx-auto max-w-xl space-y-4 px-6 py-8">
@@ -227,7 +238,7 @@ export default function Chat() {
                   return (
                     <button type="button" key={k} onClick={() => setTierKey(k)} className={pill(tierKey === k)}>
                       <b className="block text-sm">{t.label}</b>
-                      <span className="block text-sm text-rose-300">{won(t.fee)}</span>
+                      <span className="block text-sm text-rose-300">{won(gradeFee(k, priceGrade))}</span>
                       <ul className="mt-1 space-y-0.5 text-[11px] text-muted">
                         {INCLUDES[k].map((s) => <li key={s}>✓ {s}</li>)}
                       </ul>
@@ -239,7 +250,7 @@ export default function Chat() {
             </section>
 
             <section>
-              <h2 className="mb-2 text-sm font-semibold">2. 지금 답변 가능한 전문가 <span className="font-normal text-muted">(선택)</span></h2>
+              <h2 className="mb-2 text-sm font-semibold">2. 매칭 방식</h2>
               <ul className="space-y-2">
                 {groupIds.length > 0 && (
                   <li>
@@ -252,12 +263,28 @@ export default function Chat() {
                     </button>
                   </li>
                 )}
-                <li>
-                  <button type="button" onClick={() => setPick("")} className={`w-full ${pill(pick === "" || pickGone)}`}>
-                    <b className="text-sm">자동 배정</b>
-                    <span className="block text-xs text-muted">응대 가능한 전문가 여러 명에게 동시에 알려 가장 먼저 참여한 분과 연결해요</span>
+                <li className={pill(random)}>
+                  <button type="button" onClick={() => setPick("")} className="w-full text-left">
+                    <b className="text-sm">🎲 랜덤 매칭 <span className="font-normal text-muted">· {status.category} 분야</span></b>
+                    <span className="block text-xs text-muted">{status.category} 분야 전문가 중 무작위로 여러 명에게 동시에 알려, 가장 먼저 참여한 분과 연결해요</span>
                   </button>
+                  {random && (
+                    <div className="mt-2">
+                      <p className="mb-1 text-xs text-muted">원하는 전문가 등급 (이 등급 이상만 연결돼요)</p>
+                      <div className="flex flex-wrap gap-1">
+                        {EXPERT_GRADES.map((g, i) => {
+                          const n = eligible.filter((x) => x.grade >= i).length;
+                          return (
+                            <button type="button" key={g.label} onClick={() => setMinGrade(i)} className={`rounded-full border px-2.5 py-1 text-xs ${minGrade === i ? "border-rose-500 bg-rose-500 text-white" : "border-border text-muted hover:text-foreground"}`}>
+                              {i === 0 ? "전체" : `${g.label} 이상`} {g.plusPct > 0 && <span className="opacity-80">+{g.plusPct}%</span>} <span className="opacity-60">· 지금 {n}명</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </li>
+                {eligible.length > 0 && <li className="pt-1 text-xs font-semibold text-muted">또는 전문가 직접 지정</li>}
                 {eligible.map((x) => (
                   <li key={x.id}>
                     <button type="button" onClick={() => setPick(x.id)} className={`flex w-full gap-3 ${pill(pick === x.id)}`}>
@@ -265,7 +292,9 @@ export default function Chat() {
                       <span className="min-w-0 flex-1">
                       <span className="flex items-center gap-1.5 text-sm">
                         <b>{x.name}</b>
+                        <GradeBadge grade={x.grade} />
                         <span className="text-[11px] text-emerald-400">● 응대 가능</span>
+                        <span className="ml-auto text-xs text-rose-300">{won(gradeFee(tierKey, x.grade))}</span>
                       </span>
                       {x.salon && <span className="block text-xs text-foreground/80">🏢 {x.salon}</span>}
                       {x.headline && <span className="block text-xs">{x.headline}</span>}
@@ -281,26 +310,27 @@ export default function Chat() {
               </ul>
               {eligible.length === 0 && (
                 <p className="mt-2 rounded-lg border border-amber-500/20 bg-amber-500/10 p-2 text-xs text-amber-300">
-                  지금 응대 가능한 전문가가 없어요. 자동 배정으로 신청하면 쉬는 중이던 전문가가 돌아올 때까지 기다리고, {AUTO_REFUND_MINUTES}분 안에 아무도 참여하지 않으면 전액 환불돼요.
+                  지금 응대 가능한 전문가가 없어요. 랜덤 매칭으로 신청하면 쉬는 중이던 전문가가 돌아올 때까지 기다리고, {AUTO_REFUND_MINUTES}분 안에 아무도 참여하지 않으면 전액 환불돼요.
                 </p>
               )}
-              {pickGone && <p className="mt-1.5 rounded-lg border border-amber-500/20 bg-amber-500/10 p-2 text-xs text-amber-300">{pick === GROUP ? "고른 전문가가 모두 지금은 쉬는 중이에요." : "고른 전문가가 지금은 쉬는 중이라 목록에 없어요."} 다른 전문가를 고르거나 자동 배정으로 신청해주세요.</p>}
-              {pick && pickOk && <p className="mt-1.5 text-xs text-muted">{pick === GROUP ? "고른 전문가들" : "고른 전문가"}에게 먼저 알리고, 5분 안에 아무도 참여하지 않으면 다른 온라인 전문가에게도 알려요.</p>}
+              {pickGone && <p className="mt-1.5 rounded-lg border border-amber-500/20 bg-amber-500/10 p-2 text-xs text-amber-300">{pick === GROUP ? "고른 전문가가 모두 지금은 쉬는 중이에요." : "고른 전문가가 지금은 쉬는 중이라 목록에 없어요."} 다른 전문가를 고르거나 랜덤 매칭으로 신청해주세요.</p>}
+              {pick && pickOk && <p className="mt-1.5 text-xs text-muted">{pick === GROUP ? "고른 전문가들" : "고른 전문가"}에게 먼저 알리고, 5분 안에 아무도 참여하지 않으면 같은 등급 이상인 다른 온라인 전문가에게도 알려요.</p>}
+              {random && minGrade > 0 && eligible.every((x) => x.grade < minGrade) && <p className="mt-1.5 rounded-lg border border-amber-500/20 bg-amber-500/10 p-2 text-xs text-amber-300">지금 응대 가능한 {gradeOf(minGrade).label} 이상 전문가가 없어요. 신청하면 돌아올 때까지 기다리고, {AUTO_REFUND_MINUTES}분 안에 아무도 참여하지 않으면 전액 환불돼요.</p>}
             </section>
 
             <div className="rounded-xl border border-border bg-surface p-4 text-sm">
               <p><b>{AUTO_REFUND_MINUTES}분 안에 응답</b>을 약속해요. 그 안에 참여하는 전문가가 없으면 자동으로 취소되고 전액 환불돼요.</p>
               <ul className="mt-2 list-disc space-y-0.5 pl-5 text-xs text-muted">
-                <li>상담 시작비 {tier.label} <b>{won(tier.fee)}</b> (신청할 때 1회)</li>
+                <li>상담 시작비 {tier.label}{priceGrade > 0 && ` · ${gradeOf(priceGrade).label} +${gradeOf(priceGrade).plusPct}%`} <b>{won(fee)}</b> (신청할 때 1회)</li>
                 <li>쪽지 글자당 {MESSAGE_PER_CHAR}코인 (최소 500코인, 1회 {MAX_MESSAGE_CHARS}자 이내)</li>
-                <li>보이스톡 초당 {COST_PER_SEC.voice}코인 · 페이스톡 초당 {COST_PER_SEC.video}코인</li>
+                <li>보이스톡 초당 {gradeCallRate("voice", priceGrade)}코인 · 페이스톡 초당 {gradeCallRate("video", priceGrade)}코인</li>
                 <li>전문가가 참여하기 전에는 언제든 전액 환불로 취소할 수 있어요.</li>
               </ul>
               <p className="mt-3">내 코인: <b>{status.coins.toLocaleString()}</b></p>
             </div>
-            {status.coins < tier.fee && <Link href="/coins" className="block rounded-lg border border-border py-2 text-center text-sm hover:border-white/30">코인 충전하러 가기</Link>}
+            {status.coins < fee && <Link href="/coins" className="block rounded-lg border border-border py-2 text-center text-sm hover:border-white/30">코인 충전하러 가기</Link>}
             {err && <p className="text-sm text-rose-400">{err}</p>}
-            <button onClick={() => post("/api/consultations", { roomId, tier: tierKey, ...(pickOk && pick === GROUP ? { expertIds: groupOnline.map((x) => x.id) } : { expertId: pickOk && pick ? pick : undefined }) })} className="w-full rounded-lg bg-rose-500 py-3 font-medium text-white hover:bg-rose-400">{won(tier.fee)} 결제하고 상담 시작</button>
+            <button onClick={() => post("/api/consultations", { roomId, tier: tierKey, ...(random ? { grade: minGrade } : pick === GROUP ? { expertIds: groupOnline.map((x) => x.id) } : { expertId: pick }) })} className="w-full rounded-lg bg-rose-500 py-3 font-medium text-white hover:bg-rose-400">{won(fee)} 결제하고 상담 시작</button>
           </>
         ) : (
           <p className="text-sm text-muted">질문 작성자가 상담을 시작하면 승인된 전문가가 참여할 수 있어요.</p>
@@ -356,6 +386,7 @@ export default function Chat() {
           {isAsker ? <>질문자(나) · 전문가: {status.expertId ? <Link href={`/experts/${status.expertId}`} className="underline">{status.expertName}</Link> : "대기 중"}</> : `전문가(나) · 질문자: ${status.askerName}`}
           {isAsker && ` · 잔액 ${status.coins.toLocaleString()}`}
           {status.tier && <span className="ml-1 rounded bg-rose-500/15 px-1.5 py-0.5 text-[11px] text-rose-300">{TIERS[status.tier].label}</span>}
+          {!!status.grade && <span className="ml-1"><GradeBadge grade={status.grade} /></span>}
         </span>
         <span className="flex shrink-0 gap-2">
           {open && isAsker && !status.expertName && <button onClick={() => confirm("전액 환불하고 상담을 취소할까요?") && post(`/api/consultations/${roomId}/cancel`)} className="underline hover:text-foreground">취소·환불</button>}
@@ -431,7 +462,7 @@ export default function Chat() {
         </form>
       )}
       {!open && err && <p className="p-3 text-xs text-rose-400">{err}</p>}
-      {call && <CallPanel call={call} roomId={roomId} billed={isAsker} onEnd={(reason) => { setCall(null); if (reason) setErr(reason); loadStatus(); }} />}
+      {call && <CallPanel call={call} roomId={roomId} billed={isAsker} grade={status.grade ?? 0} onEnd={(reason) => { setCall(null); if (reason) setErr(reason); loadStatus(); }} />}
     </div>
   );
 }

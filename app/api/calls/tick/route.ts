@@ -2,7 +2,7 @@ import { getBalance, InsufficientCoinsError } from "@/lib/server/coins";
 import { chargeAsker, getConsultation } from "@/lib/server/consult";
 import { db } from "@/lib/server/db";
 import { getUser, limited, unauthorized } from "@/lib/server/http";
-import { CONTINUE_MIN_COINS, COST_PER_SEC } from "@/lib/server/pricing";
+import { CONTINUE_MIN_COINS, gradeCallRate } from "@/lib/server/pricing";
 
 const endedStmt = db.prepare(`SELECT 1 AS x FROM call_ends WHERE call_url = ?`);
 
@@ -27,7 +27,7 @@ export async function POST(req: Request) {
   try {
     chargeAsker(
       c,
-      COST_PER_SEC[callType],
+      gradeCallRate(callType, c.grade),
       callType === "video" ? "call_video_spend" : "call_voice_spend",
       `${callType === "video" ? "페이스톡" : "보이스톡"} 1초 이용`,
     );

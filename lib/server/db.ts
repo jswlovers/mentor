@@ -325,6 +325,9 @@ try { db.exec(`ALTER TABLE users ADD COLUMN photo TEXT`); } catch {}
 // 컬러핏 AI 구독 플랜(pricing.ts COLORFIT_PLANS). 추천 1건마다 월 횟수를 썼는지(0) 코인을 냈는지(코인 수) 기록한다.
 try { db.exec(`ALTER TABLE users ADD COLUMN colorfit_plan TEXT NOT NULL DEFAULT 'free'`); } catch {}
 try { db.exec(`ALTER TABLE color_ai_recommendations ADD COLUMN coins_charged INTEGER NOT NULL DEFAULT 0`); } catch {}
+// 전문가 등급(pricing.ts EXPERT_GRADES 인덱스)과, 상담 시작 시점에 고정한 가격 등급(시작비·통화 단가 가산 기준).
+try { db.exec(`ALTER TABLE users ADD COLUMN expert_grade INTEGER NOT NULL DEFAULT 0`); } catch {}
+try { db.exec(`ALTER TABLE consultations ADD COLUMN grade INTEGER NOT NULL DEFAULT 0`); } catch {}
 // 질문자가 "지금 답변 가능한 전문가 찾기"로 여러 명을 골라 상담을 열면, 1차 알림은 이 전문가들(그 순간 ON인 사람)에게만 간다.
 db.exec(`CREATE TABLE IF NOT EXISTS consult_targets (
   room_id TEXT NOT NULL,

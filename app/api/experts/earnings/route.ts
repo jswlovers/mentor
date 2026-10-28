@@ -2,7 +2,8 @@ import { getEarningLedger, getEarnings } from "@/lib/server/coins";
 import { db } from "@/lib/server/db";
 import { forbidden, getUser, unauthorized } from "@/lib/server/http";
 import { getCommissions } from "@/lib/server/commission";
-import { MIN_WITHDRAW_COINS, TIERS } from "@/lib/server/pricing";
+import { gradeProgress } from "@/lib/server/grades";
+import { EXPERT_GRADES, MIN_WITHDRAW_COINS, TIERS } from "@/lib/server/pricing";
 
 const wStmt = db.prepare(
   `SELECT id, amount, bank_info, status, admin_note, created_at, processed_at FROM withdrawals WHERE user_id = ? ORDER BY id DESC`,
@@ -17,6 +18,8 @@ export async function GET(req: Request) {
     // 답변 등급별 전문가 몫(%) = 100 - 수수료율
     shares: getCommissions().map((c) => ({ label: TIERS[c.tier].label, pct: Math.round((100 - c.pct) * 10) / 10 })),
     minWithdraw: MIN_WITHDRAW_COINS,
+    grade: gradeProgress(user.id), // 내 등급 · 실적 · 다음 등급 조건
+    grades: EXPERT_GRADES,
     ledger: getEarningLedger(user.id),
     withdrawals: wStmt.all(user.id),
   });

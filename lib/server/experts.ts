@@ -1,7 +1,7 @@
 import { isAvailableNow } from "./availability";
 import { db } from "./db";
 import { photoUrl } from "./photo";
-import { RESPONSE_STAT_MIN_SAMPLES } from "./pricing";
+import { gradeOf, RESPONSE_STAT_MIN_SAMPLES } from "./pricing";
 
 // 전문가 찾기(목록·공개 프로필)에서 함께 쓰는 집계. 전문가마다 하위 쿼리를 돌리지 않고 테이블별로 한 번씩 묶어 센다.
 
@@ -23,9 +23,9 @@ export const portfolioUrl = (id: number) => `/api/portfolio-photo/${id}`;
 
 type UserRow = {
   id: string; name: string; expert_headline: string | null; expert_bio: string | null; expert_available: number; expert_off_start: string | null; expert_off_end: string | null;
-  expert_salon: string | null; expert_years: number | null; expert_license_file: string | null; photo: string | null; created_at: string;
+  expert_salon: string | null; expert_years: number | null; expert_license_file: string | null; photo: string | null; created_at: string; expert_grade: number;
 };
-const USER_COLS = `id, name, expert_headline, expert_bio, expert_available, expert_off_start, expert_off_end, expert_salon, expert_years, expert_license_file, photo, created_at`;
+const USER_COLS = `id, name, expert_headline, expert_bio, expert_available, expert_off_start, expert_off_end, expert_salon, expert_years, expert_license_file, photo, created_at, expert_grade`;
 const usersStmt = db.prepare(`SELECT ${USER_COLS} FROM users WHERE expert_status = 'approved' AND suspended_at IS NULL`);
 const userStmt = db.prepare(`SELECT ${USER_COLS} FROM users WHERE id = ? AND expert_status = 'approved' AND suspended_at IS NULL`);
 const reviewAggStmt = db.prepare(`SELECT expert_id, COUNT(*) AS n, AVG(rating) AS avg FROM reviews GROUP BY expert_id`);
@@ -58,6 +58,9 @@ const toPublic = (u: UserRow, cats: string[], rating: { n: number; avg: number |
   licenseVerified: !!u.expert_license_file, // 면허증 사진을 제출해 관리자 승인을 받은 전문가
   photoUrl: photoUrl(u.id, u.photo),
   categories: cats,
+  grade: u.expert_grade ?? 0,
+  gradeLabel: gradeOf(u.expert_grade).label,
+  gradePlusPct: gradeOf(u.expert_grade).plusPct, // 상담비·통화 단가 가산율(%)
   available: isAvailableNow(u), // ON이고 상담 불가 시간이 아닐 때
   offHours: u.expert_off_start && u.expert_off_end ? `${u.expert_off_start}~${u.expert_off_end}` : null,
   rating: rating.avg === null ? null : Math.round(rating.avg * 10) / 10,

@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { api, jsonInit, useMe } from "@/lib/client";
-import { ATTACHMENT_COST, COLORFIT_EXTRA_COST, COLORFIT_PLANS, COST_PER_SEC, MAX_MESSAGE_CHARS, MESSAGE_MIN_COST, MESSAGE_PER_CHAR, MIN_CHARGE_KRW, TIER_KEYS, TIERS } from "@/lib/server/pricing";
+import { ATTACHMENT_COST, COLORFIT_EXTRA_COST, COLORFIT_PLANS, COST_PER_SEC, EXPERT_GRADES, MAX_MESSAGE_CHARS, MESSAGE_MIN_COST, MESSAGE_PER_CHAR, MIN_CHARGE_KRW, TIER_KEYS, TIERS } from "@/lib/server/pricing";
 
 type Charge = { id: number; amount_krw: number; coins: number; status: string; provider: string; depositor: string | null; admin_note: string | null; created_at: string };
 declare global { interface Window { TossPayments?: (key: string) => { payment: (o: { customerKey: string }) => { requestPayment: (o: Record<string, unknown>) => Promise<void> } } } }
@@ -113,6 +113,7 @@ export default function Coins() {
           <li>쪽지: 글자당 {MESSAGE_PER_CHAR}코인, 최소 {won(MESSAGE_MIN_COST)} (1회 {MAX_MESSAGE_CHARS}자 이내, 사진·파일 +{won(ATTACHMENT_COST)})</li>
           <li>보이스톡: 초당 {COST_PER_SEC.voice}코인 (분당 {(COST_PER_SEC.voice * 60).toLocaleString()})</li>
           <li>페이스톡: 초당 {COST_PER_SEC.video}코인 (분당 {(COST_PER_SEC.video * 60).toLocaleString()})</li>
+          <li>전문가 등급 가산 (상담 시작비·통화 요금): {EXPERT_GRADES.slice(1).map((g, i) => <span key={g.label}>{i > 0 && " · "}{g.label} <b>+{g.plusPct}%</b></span>)} — 지정한 전문가의 등급, 랜덤 매칭은 고른 최소 등급 기준</li>
           <li>컬러핏 AI: 구독 플랜의 월 횟수를 다 쓰면 추천 1회 {won(COLORFIT_EXTRA_COST)}</li>
         </ul>
         <p className="mt-2 text-xs text-muted">요금은 상담을 신청한 질문자에게만 부과되고, 전문가는 무료로 답변·통화해요. 전문가가 참여하기 전에는 전액 환불로 취소할 수 있어요.</p>

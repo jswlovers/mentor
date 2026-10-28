@@ -18,6 +18,8 @@ export type Consultation = {
   preferred_expert_id: string | null;
   tier: Tier;
   commission_pct: number | null;
+  /** 가격 등급(EXPERT_GRADES 인덱스). 시작 때 고정되고, 랜덤 매칭은 이 등급 이상 전문가만 부른다. */
+  grade: number;
 };
 
 const getStmt = db.prepare(`SELECT * FROM consultations WHERE room_id = ?`);

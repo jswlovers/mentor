@@ -1,5 +1,6 @@
 import { getConsultation, isValidRoomId } from "@/lib/server/consult";
 import { db } from "@/lib/server/db";
+import { refreshGrade } from "@/lib/server/grades";
 import { forbidden, getUser, unauthorized } from "@/lib/server/http";
 import { notify } from "@/lib/server/notify";
 
@@ -21,5 +22,6 @@ export async function POST(req: Request) {
   if (existing.get(roomId)) return Response.json({ error: "이미 후기를 남겼어요" }, { status: 409 });
   insert.run(roomId, c.expert_id, user.id, user.name, stars, String(comment ?? "").trim().slice(0, 300) || null);
   notify(c.expert_id, `${user.name}님이 별점 ${stars}점 후기를 남겼어요`, `/experts/${c.expert_id}`);
+  refreshGrade(c.expert_id);
   return Response.json({ ok: true }, { status: 201 });
 }

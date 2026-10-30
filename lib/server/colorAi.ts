@@ -7,6 +7,7 @@ import { harmonyNotes } from "../colorHarmony";
 import { grayHistoryLabel, grayPercentOf } from "../levelChart";
 import { proRecipeNotes } from "../proRecipes";
 import { colorBasicNotes } from "../colorBasicBook";
+import { foilworkRecipeNotes } from "../foilworkRecipes";
 import { HUE_LABEL, complement, underlyingPigment } from "../colorWheel";
 import {
   BLEACH_LEVEL,
@@ -330,8 +331,13 @@ export function computeRecommendation(input: RecommendInput): Formula {
       currentLevel,
       developerPercent,
       grayPercent,
+      thickness: input.thickness,
+      history,
+      toneDown,
+      toning,
     }),
   );
+  notes.push(...foilworkRecipeNotes(target.name, toning));
 
   notes.push("AI 추천은 보조 정보이며 실제 모발 상태에 따른 디자이너의 최종 판단이 필요합니다.");
 

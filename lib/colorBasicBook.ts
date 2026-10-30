@@ -1,5 +1,6 @@
-// 『COLOR BASIC MASTER BOOK』 Chapter 1(멜라닌색소~산화제 비율)·Chapter 2(색상 베이직~언더톤) 정리.
-// 출처: 사용자 제공 촬영본 PDF "Chapter 1- 멜라닌색소.pdf" (2026-10-30, 책 p.17~50 중 24쪽).
+// 『COLOR BASIC MASTER BOOK』 Chapter 1~7 정리.
+// 출처: 사용자 제공 촬영본 PDF (2026-10-30) "Chapter 1- 멜라닌색소.pdf"(책 p.17~50),
+// "Chapter 2- 적색계 언더톤.pdf"(p.49~120, Chapter 3 모질~Chapter 7 유지력), "Chapter 7- 컬러클렌징.pdf"(p.121~124).
 // 문구는 책 내용을 따르고, 목표 컬러와 책 분류를 잇는 매핑(…_OF 함수)은 Claude가 덧붙인 것이다.
 // Q&A 항목은 lib/server/colorKnowledgeSeed.ts, 추천 문구는 lib/server/colorAi.ts에서 쓴다.
 
@@ -133,6 +134,46 @@ function changeKindOf(group: string, hue: string | null): ChangeKind | null {
   return null;
 }
 
+/** p.71~72 톤업 공식: 원하는 명도에 더하는 염모제 레벨(모질 및 베이스). */
+export const TONE_UP_LEVEL_ADJUST: { hair: string; add: number }[] = [
+  { hair: "경모", add: 2 },
+  { hair: "보통모", add: 1 },
+  { hair: "연모", add: -1 },
+  { hair: "곱슬", add: 1 },
+  { hair: "기염모(염색이력)", add: 4 },
+  { hair: "매직 드라이모", add: 2 },
+  { hair: "펌 퇴색모", add: -1 },
+];
+
+/** p.83 모질별 뿌리염색 명도 조절법 (원하는 10Lv 기준). */
+export const ROOT_BY_HAIR_TYPE: { hair: string; recipe: string; why: string }[] = [
+  { hair: "보통모", recipe: "11Lv + 6%", why: "" },
+  { hair: "발수성모", recipe: "프리소프트닝 후 11Lv + 6%", why: "염모제 침투가 잘 되지 않으므로 산화제를 선도포해 유분과 수분을 최대한 적게 만든 후 염색한다" },
+  { hair: "곱슬모", recipe: "12Lv + 6%", why: "같은 명도로 톤업하면 난반사로 더 얼룩져 보이므로 명도를 올려 조금 더 밝게 하면 난반사가 줄어든다" },
+  { hair: "건조모", recipe: "젖은 상태에서 11Lv + 9%", why: "수분이 너무 없으면 탈색이 잘 진행되지 않아 젖은 상태로 시작하고 반드시 9% 산화제를 쓴다" },
+];
+
+/** p.73~74 톤다운 공식: 베이스 레벨별 N(NB) 염모제 레벨과 결과. */
+export const TONE_DOWN_TABLE: { base: number; rows: [shade: number, result: number][] }[] = [
+  { base: 10, rows: [[9, 9], [8, 8], [7, 7], [6, 6]] },
+  { base: 12, rows: [[9, 11], [8, 10], [7, 9], [6, 8]] },
+];
+
+/** p.106 새치커버 공식 Case1: 새치량별 새치커버 염모제 레벨 (결과는 모두 7Lv 정도). */
+export const GRAY_COVER_LEVEL: { from: number; to: number; level: number }[] = [
+  { from: 10, to: 20, level: 8 },
+  { from: 30, to: 30, level: 7 },
+  { from: 40, to: 50, level: 6 },
+];
+
+/** p.111 기장별 총 사용량(1제+2제 1:1 기준, g). */
+export const AMOUNT_BY_LENGTH: { length: string; total: string; first: string }[] = [
+  { length: "뿌리", total: "80~100g", first: "40~50g" },
+  { length: "숏", total: "100~160g", first: "50~80g" },
+  { length: "미디움", total: "140~240g", first: "70~120g" },
+  { length: "롱", total: "240~300g", first: "120~150g" },
+];
+
 export type BookNoteInput = {
   targetName: string;
   targetGroup: string;
@@ -141,6 +182,10 @@ export type BookNoteInput = {
   currentLevel: number;
   developerPercent: number;
   grayPercent: number;
+  thickness?: string;
+  history?: string[];
+  toneDown?: boolean;
+  toning?: boolean;
 };
 
 /** 컬러핏 AI 추천 결과에 붙일 책 기반 안내 문구. */
@@ -174,6 +219,57 @@ export function colorBasicNotes(input: BookNoteInput): string[] {
     notes.push(
       `${src} · 유지력: 건강모 기준 ${label}은 약 ${RETENTION_MONTHS[ret]}개월. 염색을 거듭할수록 유지력이 높아져(레드 2회면 12개월 뒤 애쉬 체인지 가능), 그 전에 바꾸려면 컬러클렌징(탈염)으로 인공염료를 지우고 시술하세요.`,
     );
+  }
+  notes.push(...chapter3to7Notes(input));
+  return notes;
+}
+
+// (Claude 매핑) 컬러핏 화면의 모발 굵기 값 → 책의 모질 이름.
+const HAIR_OF: Record<string, string> = { "가는 모발": "연모", "보통모": "보통모", "굵은 모발": "경모" };
+
+function chapter3to7Notes(input: BookNoteInput): string[] {
+  const notes: string[] = [];
+  const src = "컬러 베이직 마스터북";
+  const history = input.history ?? [];
+  const dyed = history.includes("흑염색 이력") || history.includes("탈색 1회");
+
+  // 톤업(밝히기)일 때만 책의 레벨 공식을 보여준다.
+  if (!input.toneDown && !input.toning && input.targetLevel > input.currentLevel) {
+    const hair = HAIR_OF[input.thickness ?? "보통모"] ?? "보통모";
+    const adj = TONE_UP_LEVEL_ADJUST.find((a) => a.hair === hair)!;
+    const level = input.targetLevel + adj.add;
+    notes.push(
+      `${src} · 톤업 레벨 공식: ${hair}는 원하는 명도 ${adj.add > 0 ? "+" : ""}${adj.add}Lv → ${input.targetLevel}레벨을 원하면 ${level}레벨 염모제를 고르세요.` +
+        (dyed ? ` 기염모(염색이력)는 +4Lv(${input.targetLevel + 4}레벨) 염모제에 산화제를 9%로 높여야 톤업돼요(염모제는 인공염료를 분해하지 못함).` : ""),
+    );
+  }
+
+  if (input.toneDown) {
+    const table = TONE_DOWN_TABLE.find((t) => t.base === (input.currentLevel >= 11 ? 12 : 10))!;
+    const row = table.rows.find((r) => r[1] === input.targetLevel);
+    notes.push(
+      `${src} · 톤다운 공식: NB(내추럴) 계열을 반드시 섞고 산화제는 3% 이하. ${table.base}Lv 베이스에서는 ${table.rows.map(([s, r]) => `${s}/N→${r}Lv`).join(", ")}${row ? ` (목표 ${input.targetLevel}레벨은 ${row[0]}레벨 N)` : ""}. 컬러감을 살리려면 한색은 컬러:NB 2:1, 난색은 1:1.`,
+    );
+    if (input.currentLevel - input.targetLevel >= 6) {
+      notes.push(`${src} · 명도 차이가 많이 날 때: (기염모+신생모)÷2 결과가 10Lv 이하면 그보다 2레벨 낮은 약제, 11Lv 이상이면 결과에서 원하는 명도를 뺀 레벨의 새치커버(패션그레이) 약제를 3%로 기염모에, 신생모에는 원하는 레벨 + 6%를 먼저 도포해요.`);
+    }
+  }
+
+  if (input.grayPercent > 0) {
+    const g = GRAY_COVER_LEVEL.find((r) => input.grayPercent >= r.from - 5 && input.grayPercent <= r.to + 5);
+    notes.push(
+      `${src} · 새치커버 공식: 새치커버 염모제는 7Lv·새치 30~40% 기준이에요. 10~20%면 8Lv, 30%면 7Lv, 40~50%면 6Lv를 고르면 비슷하게 7Lv가 나와요${g ? ` (지금 ${input.grayPercent}%는 ${g.level}Lv)` : ""}. 흰머리 많은 곳부터, 산화제는 6%만, 도포량은 멋내기의 1.5배.`,
+    );
+  }
+
+  if (input.thickness === "가는 모발") {
+    notes.push(`${src} · 연모: 밝게 잘 나오지만 유지력이 짧고 손상되기 쉬워요. 낮은 농도 산화제를 쓰고, 브라운 계열을 20~30% 믹스하면 유지력이 높아져요.`);
+  } else if (input.thickness === "굵은 모발") {
+    notes.push(`${src} · 경모: 탈색이 잘 안 돼 색이 탁할 수 있어요. 원하는 레벨보다 높은 레벨 + 높은 농도 산화제, 브라운 색소가 적은 염모제를 쓰면 투명감이 나요.`);
+  }
+
+  if (history.includes("손상모")) {
+    notes.push(`${src} · 손상모 유지력: 염색 직후 클리닉·열처리는 퇴색을 늘려요(4번 퇴색). 선착법(1레벨 낮은 염모제를 먼저 바르고 10~15분 후 본 염색)이나 후토닝으로 유지력을 높이세요.`);
   }
   return notes;
 }

@@ -2,7 +2,13 @@
 // 유튜브 영상의 화면(책 페이지)과 자막을 보고 정리했다. 서버 시작 시 color_knowledge 테이블에 upsert 된다.
 // 새 자료를 학습시키려면 KNOWLEDGE_SOURCES 에 출처를, KNOWLEDGE_ENTRIES 에 항목을 추가하면 된다.
 import { PRO_RECIPE_COMMON, PRO_RECIPES } from "../proRecipes";
+import { FOILWORK_RECIPES, FOILWORK_TERMS } from "../foilworkRecipes";
 import {
+  AMOUNT_BY_LENGTH,
+  GRAY_COVER_LEVEL,
+  ROOT_BY_HAIR_TYPE,
+  TONE_DOWN_TABLE,
+  TONE_UP_LEVEL_ADJUST,
   DEVELOPER_GUIDE,
   LEVEL_POINTS,
   LOW_RISK_LABEL,

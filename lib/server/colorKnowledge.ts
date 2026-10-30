@@ -49,9 +49,6 @@ type Row = {
   points: string;
   page: string | null;
   ts: number | null;
-  source_title: string;
-  source_author: string;
-  source_url: string;
 };
 
 export type KnowledgeAnswer = {
@@ -59,28 +56,16 @@ export type KnowledgeAnswer = {
   title: string;
   summary: string;
   points: string[];
-  page: string | null;
-  source: { title: string; author: string; url: string };
 };
 
-const allStmt = db.prepare(
-  `SELECT k.*, s.title AS source_title, s.author AS source_author, s.url AS source_url
-   FROM color_knowledge k JOIN color_knowledge_sources s ON s.id = k.source_id ORDER BY k.rowid`,
-);
+const allStmt = db.prepare(`SELECT k.* FROM color_knowledge k ORDER BY k.rowid`);
 const logStmt = db.prepare(
   `INSERT INTO color_knowledge_questions (user_id, question, top_entry_id, matched) VALUES (?, ?, ?, ?)`,
 );
 
+// 저작권 때문에 출처(책·저자·영상 링크)와 페이지는 화면에 보내지 않는다. DB에는 관리용으로만 남긴다.
 function toAnswer(r: Row): KnowledgeAnswer {
-  const url = r.ts != null ? `${r.source_url}${r.source_url.includes("?") ? "&" : "?"}t=${r.ts}s` : r.source_url;
-  return {
-    id: r.id,
-    title: r.title,
-    summary: r.summary,
-    points: JSON.parse(r.points),
-    page: r.page,
-    source: { title: r.source_title, author: r.source_author, url },
-  };
+  return { id: r.id, title: r.title, summary: r.summary, points: JSON.parse(r.points) };
 }
 
 // 같은 뜻의 다른 표기를 하나로 맞춘다.
@@ -181,13 +166,24 @@ export function getKnowledge(id: string) {
   return row ? toAnswer(row) : null;
 }
 
-const sourcesStmt = db.prepare(`SELECT id, title, author, url, note FROM color_knowledge_sources ORDER BY rowid`);
+const sourcesStmt = db.prepare(`SELECT id FROM color_knowledge_sources ORDER BY rowid`);
+
+// 주제 묶음 이름. 출처 이름 대신 내용으로 부른다.
+const GROUP_LABEL: Record<string, string> = {
+  "yt-C2UzZDQR3YM": "호일워크·배색 테크닉",
+  "pro-recipes-dm": "현장 컬러 레시피",
+  "color-basic-master-book": "컬러 기초 이론",
+  "yangleehair-foilwork": "탈색모 디자인 레시피",
+  "level-chart-photos-20261007": "레벨 차트 읽기",
+};
 
 export function listKnowledge() {
   const rows = allStmt.all() as Row[];
-  const sources = (sourcesStmt.all() as { id: string; title: string; author: string; url: string; note: string }[]).map((s) => ({
-    ...s,
+  // 출처 id에 책·살롱 이름이 들어 있어 순번 키로 내보낸다.
+  const groups = (sourcesStmt.all() as { id: string }[]).map((s, i) => ({
+    id: `g${i}`,
+    label: GROUP_LABEL[s.id] ?? "컬러 이론",
     topics: rows.filter((r) => r.source_id === s.id).map((r) => ({ id: r.id, title: r.title })),
   }));
-  return { sources };
+  return { groups };
 }

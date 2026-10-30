@@ -227,5 +227,5 @@ export function foilworkRecipeNotes(targetName: string, toning: boolean): string
   const picked = oneTone.length ? oneTone : hits.filter(isPartialDesign);
   return picked
     .slice(0, 2)
-    .map((r) => `양리헤어 ${isPartialDesign(r) ? "부분 디자인" : "원톤"} 레시피 · ${r.look} (${r.base} 베이스): ${r.formula}. 디자인·모발 상태에 따라 조정하세요.`);
+    .map((r) => `탈색모 ${isPartialDesign(r) ? "부분 디자인" : "원톤"} 레시피 · ${r.look} (${r.base} 베이스): ${r.formula}. 디자인·모발 상태에 따라 조정하세요.`);
 }

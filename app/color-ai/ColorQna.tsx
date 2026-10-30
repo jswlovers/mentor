@@ -9,12 +9,10 @@ type Answer = {
   title: string;
   summary: string;
   points: string[];
-  page: string | null;
-  source: { title: string; author: string; url: string };
 };
 type Related = { id: string; title: string };
 type AskResult = { matched: boolean; answer: Answer | null; related: Related[] };
-type Source = { id: string; title: string; author: string; url: string; topics: Related[] };
+type Group = { id: string; label: string; topics: Related[] };
 
 const SAMPLE_QUESTIONS = [
   "레벨 차트와 명도 차트는 어떻게 읽나요?",
@@ -27,19 +25,19 @@ const SAMPLE_QUESTIONS = [
   "투톤 배색 요령 알려줘",
 ];
 
-// 학습한 컬러 이론 자료(영상·책)에서 답을 찾아 출처와 함께 보여준다.
+// 학습한 컬러 이론 자료에서 답을 찾아 보여준다. 저작권 때문에 출처는 표시하지 않는다.
 export default function ColorQna() {
   const [question, setQuestion] = useState("");
   const [asked, setAsked] = useState("");
   const [result, setResult] = useState<AskResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [sources, setSources] = useState<Source[]>([]);
+  const [groups, setGroups] = useState<Group[]>([]);
   const [showTopics, setShowTopics] = useState(false);
 
   useEffect(() => {
-    api<{ sources: Source[] }>("/api/color-ai/ask").then((r) => {
-      if (r.ok) setSources(r.data.sources);
+    api<{ groups: Group[] }>("/api/color-ai/ask").then((r) => {
+      if (r.ok) setGroups(r.data.groups);
     });
   }, []);
 
@@ -79,7 +77,7 @@ export default function ColorQna() {
     ask(question);
   };
 
-  const topicCount = sources.reduce((n, s) => n + s.topics.length, 0);
+  const topicCount = groups.reduce((n, g) => n + g.topics.length, 0);
 
   return (
     <section className="mt-6 rounded-2xl border border-border bg-surface p-4 md:p-5">
@@ -87,7 +85,7 @@ export default function ColorQna() {
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-rose-400">Color Theory Q&amp;A</p>
           <h2 className="mt-1 text-lg font-bold">컬러 이론 물어보기</h2>
-          <p className="mt-1 text-xs text-muted">학습한 자료 {sources.length}건 · 주제 {topicCount}개에서 답을 찾아 출처와 함께 알려드려요.</p>
+          <p className="mt-1 text-xs text-muted">학습한 주제 {topicCount}개에서 답을 찾아 알려드려요.</p>
         </div>
         <button type="button" onClick={() => setShowTopics((v) => !v)} className="rounded-full border border-border px-3 py-1.5 text-xs font-semibold text-muted hover:text-foreground">
           {showTopics ? "주제 닫기" : "학습한 주제 보기"}
@@ -96,14 +94,11 @@ export default function ColorQna() {
 
       {showTopics ? (
         <div className="mt-4 space-y-3">
-          {sources.map((s) => (
-            <div key={s.id} className="rounded-xl border border-border bg-surface-2 p-3">
-              {s.url
-                ? <a href={s.url} target="_blank" rel="noreferrer" className="text-xs font-bold text-rose-300 underline">{s.title}</a>
-                : <span className="text-xs font-bold text-rose-300">{s.title}</span>}
-              <p className="mt-0.5 text-[11px] text-muted">{s.author}</p>
+          {groups.map((g) => (
+            <div key={g.id} className="rounded-xl border border-border bg-surface-2 p-3">
+              <span className="text-xs font-bold text-rose-300">{g.label}</span>
               <div className="mt-2 flex flex-wrap gap-1.5">
-                {s.topics.map((t) => (
+                {g.topics.map((t) => (
                   <button key={t.id} type="button" onClick={() => openTopic(t)} className="rounded-full border border-border px-2.5 py-1 text-[11px] text-muted hover:border-rose-500 hover:text-foreground">{t.title}</button>
                 ))}
               </div>
@@ -141,12 +136,6 @@ export default function ColorQna() {
               <ul className="mt-3 list-disc space-y-1.5 pl-4 text-xs leading-5 text-muted">
                 {result.answer.points.map((p, i) => <li key={i}>{p}</li>)}
               </ul>
-              <p className="mt-4 border-t border-border pt-3 text-[11px] text-muted">
-                출처: {result.answer.source.url
-                  ? <a href={result.answer.source.url} target="_blank" rel="noreferrer" className="text-rose-300 underline">{result.answer.source.title}</a>
-                  : result.answer.source.title}
-                {result.answer.page ? ` · ${result.answer.page}` : ""}
-              </p>
             </>
           ) : (
             <p className="mt-2 text-sm leading-6">

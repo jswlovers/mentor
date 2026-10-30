@@ -387,7 +387,6 @@ export default function ColorAiPage() {
   const [showAllShades, setShowAllShades] = useState(false);
   const [selectedTubes, setSelectedTubes] = useState<string[]>([]);
   const brand = DYE_BRANDS.find((b) => b.id === brandId) ?? DYE_BRANDS[0];
-  const visibleLines = brand.lines.filter((l) => lineId === "all" || l.id === lineId);
   const [thickness, setThickness] = useState("보통모");
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [measured, setMeasured] = useState<Measured | null>(null);
@@ -719,7 +718,6 @@ ${r.data.cost.toLocaleString()}코인으로 1회 더 추천받을까요? (보유
                   })}
                 </div>
               ) : null}
-              <p className="mt-2 text-[10px] leading-4 text-muted">출처: {[...new Set(visibleLines.map((l) => l.source))].join(" · ")}</p>
             </div>
 
             <button type="button" onClick={() => createRecommendation()} disabled={recommending} className="mt-6 w-full rounded-xl bg-rose-500 py-3.5 font-bold text-white transition hover:bg-rose-400 disabled:opacity-50">{recommending ? "추천 계산 중..." : "AI 배합 추천 받기"}</button>

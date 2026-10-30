@@ -191,7 +191,7 @@ export type BookNoteInput = {
 /** 컬러핏 AI 추천 결과에 붙일 책 기반 안내 문구. */
 export function colorBasicNotes(input: BookNoteInput): string[] {
   const notes: string[] = [];
-  const src = "컬러 베이직 마스터북";
+  const src = "컬러 이론";
 
   // 염색할 때 드러나는 베이스: 밝히면 목표 레벨, 아니면 지금 레벨. 13레벨 이상이면 황색계로 본다(책 p.48 언더톤 표).
   const baseLevel = Math.max(input.currentLevel, input.targetLevel);
@@ -211,7 +211,7 @@ export function colorBasicNotes(input: BookNoteInput): string[] {
   }
 
   const lineKey: LowRiskKey | undefined = input.grayPercent >= 30 ? "grayCover" : LOW_RISK_OF[input.targetName];
-  if (lineKey) notes.push(`${src} · 리스크가 적은 ${LOW_RISK_LABEL[lineKey]} 라인(저자 개인 견해): ${LOW_RISK_LINES[lineKey]}.`);
+  if (lineKey) notes.push(`${src} · 리스크가 적은 ${LOW_RISK_LABEL[lineKey]} 라인(참고용): ${LOW_RISK_LINES[lineKey]}.`);
 
   const ret = input.grayPercent >= 30 ? "grayCover" : retentionOf(input.targetGroup, input.targetName);
   if (ret) {
@@ -242,7 +242,7 @@ export function toneUpPlan(targetLevel: number, thickness?: string, history: str
 
 function chapter3to7Notes(input: BookNoteInput): string[] {
   const notes: string[] = [];
-  const src = "컬러 베이직 마스터북";
+  const src = "컬러 이론";
   const history = input.history ?? [];
 
   // 톤업(밝히기)일 때만 책의 레벨 공식을 보여준다. 배합도 이 레벨로 계산한다(colorAi.ts).

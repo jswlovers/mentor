@@ -6,6 +6,7 @@ import { COLORFIT_PLANS, isColorfitPlan, type ColorfitPlan } from "./pricing";
 import { harmonyNotes } from "../colorHarmony";
 import { grayHistoryLabel, grayPercentOf } from "../levelChart";
 import { proRecipeNotes } from "../proRecipes";
+import { colorBasicNotes } from "../colorBasicBook";
 import { HUE_LABEL, complement, underlyingPigment } from "../colorWheel";
 import {
   BLEACH_LEVEL,
@@ -320,6 +321,17 @@ export function computeRecommendation(input: RecommendInput): Formula {
 
   notes.push(...harmonyNotes(target.name));
   notes.push(...proRecipeNotes(target.name, brand?.id));
+  notes.push(
+    ...colorBasicNotes({
+      targetName: target.name,
+      targetGroup: target.group,
+      targetHue: target.hue,
+      targetLevel,
+      currentLevel,
+      developerPercent,
+      grayPercent,
+    }),
+  );
 
   notes.push("AI 추천은 보조 정보이며 실제 모발 상태에 따른 디자이너의 최종 판단이 필요합니다.");
 

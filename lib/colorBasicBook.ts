@@ -227,20 +227,30 @@ export function colorBasicNotes(input: BookNoteInput): string[] {
 // (Claude 매핑) 컬러핏 화면의 모발 굵기 값 → 책의 모질 이름.
 const HAIR_OF: Record<string, string> = { "가는 모발": "연모", "보통모": "보통모", "굵은 모발": "경모" };
 
+// 염모제 넘버가 있는 가장 높은 레벨. 공식 결과가 이보다 높으면 여기서 멈춘다.
+const MAX_DYE_LEVEL = 13;
+
+export type ToneUpPlan = { hair: string; add: number; level: number; dyed: boolean };
+
+/** p.71~72 톤업 공식으로 고를 염모제 레벨. 기염모(흑염색 이력)는 모질과 관계없이 +4Lv에 산화제 9%. */
+export function toneUpPlan(targetLevel: number, thickness?: string, history: string[] = []): ToneUpPlan {
+  const dyed = history.includes("흑염색 이력");
+  const hair = dyed ? "기염모(염색이력)" : HAIR_OF[thickness ?? "보통모"] ?? "보통모";
+  const add = TONE_UP_LEVEL_ADJUST.find((a) => a.hair === hair)!.add;
+  return { hair, add, level: Math.min(targetLevel + add, MAX_DYE_LEVEL), dyed };
+}
+
 function chapter3to7Notes(input: BookNoteInput): string[] {
   const notes: string[] = [];
   const src = "컬러 베이직 마스터북";
   const history = input.history ?? [];
-  const dyed = history.includes("흑염색 이력") || history.includes("탈색 1회");
 
-  // 톤업(밝히기)일 때만 책의 레벨 공식을 보여준다.
+  // 톤업(밝히기)일 때만 책의 레벨 공식을 보여준다. 배합도 이 레벨로 계산한다(colorAi.ts).
   if (!input.toneDown && !input.toning && input.targetLevel > input.currentLevel) {
-    const hair = HAIR_OF[input.thickness ?? "보통모"] ?? "보통모";
-    const adj = TONE_UP_LEVEL_ADJUST.find((a) => a.hair === hair)!;
-    const level = input.targetLevel + adj.add;
+    const plan = toneUpPlan(input.targetLevel, input.thickness, history);
     notes.push(
-      `${src} · 톤업 레벨 공식: ${hair}는 원하는 명도 ${adj.add > 0 ? "+" : ""}${adj.add}Lv → ${input.targetLevel}레벨을 원하면 ${level}레벨 염모제를 고르세요.` +
-        (dyed ? ` 기염모(염색이력)는 +4Lv(${input.targetLevel + 4}레벨) 염모제에 산화제를 9%로 높여야 톤업돼요(염모제는 인공염료를 분해하지 못함).` : ""),
+      `${src} · 톤업 레벨 공식: ${plan.hair}는 원하는 명도 ${plan.add > 0 ? "+" : ""}${plan.add}Lv → ${input.targetLevel}레벨을 원하면 ${plan.level}레벨 염모제를 써요. 배합 넘버도 ${plan.level}레벨 기준으로 골랐어요.` +
+        (plan.dyed ? " 염모제는 인공염료를 분해하지 못해 산화제를 9%로 높였어요." : ""),
     );
   }
 

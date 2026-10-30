@@ -2,7 +2,7 @@
 // 유튜브 영상의 화면(책 페이지)과 자막을 보고 정리했다. 서버 시작 시 color_knowledge 테이블에 upsert 된다.
 // 새 자료를 학습시키려면 KNOWLEDGE_SOURCES 에 출처를, KNOWLEDGE_ENTRIES 에 항목을 추가하면 된다.
 import { PRO_RECIPE_COMMON, PRO_RECIPES } from "../proRecipes";
-import { FOILWORK_RECIPES, FOILWORK_TERMS } from "../foilworkRecipes";
+import { FOILWORK_RECIPES, FOILWORK_TERMS, isPartialDesign } from "../foilworkRecipes";
 import {
   AMOUNT_BY_LENGTH,
   GRAY_COVER_LEVEL,
@@ -247,7 +247,7 @@ export const KNOWLEDGE_ENTRIES: KnowledgeEntry[] = [
     id: "weaving-chip-pitch",
     sourceId: S,
     title: "위빙: 칩과 피치",
-    keywords: ["위빙", "칩", "피치", "간격", "두께", "weaving", "chip", "pitch", "하이라이트", "강조", "내추럴", "자연스럽", "블랜드"],
+    keywords: ["위빙", "호일워크", "칩", "피치", "간격", "두께", "weaving", "chip", "pitch", "하이라이트", "강조", "내추럴", "자연스럽", "블랜드"],
     summary:
       "위빙에서 호일에 떠서 넣는 모발 한 다발을 「칩」, 칩과 칩 사이의 빈 공간(떨어뜨리는 부분)을 「피치」라고 합니다. 칩과 피치의 폭(두께)과 간격에 따라 색 라인의 강약이 바뀝니다.",
     points: [
@@ -547,10 +547,10 @@ const CB = "color-basic-master-book";
 const CHANGE_LABEL: Record<string, string> = { red: "붉은색", orange: "주황색", brown: "브라운", green: "녹색", blue: "파란색" };
 KNOWLEDGE_SOURCES.push({
   id: CB,
-  title: "COLOR BASIC MASTER BOOK — Chapter 1 멜라닌색소 ~ Chapter 2 언더톤",
+  title: "COLOR BASIC MASTER BOOK — Chapter 1 멜라닌색소 ~ Chapter 7 유지력·컬러클렌징",
   author: "사용자 제공 촬영본 PDF",
   url: "",
-  note: "2026-10-30 제공 \"Chapter 1- 멜라닌색소.pdf\"(24쪽, 책 p.17~50). 페이지 위 손글씨 메모는 읽기 어려워 넣지 않음.",
+  note: "2026-10-30 제공 \"Chapter 1- 멜라닌색소.pdf\"(책 p.17~50), \"Chapter 2- 적색계 언더톤.pdf\"(p.49~120), \"Chapter 7- 컬러클렌징.pdf\"(p.121~124). 페이지 위 손글씨 메모는 읽기 어려워 넣지 않음.",
 });
 KNOWLEDGE_ENTRIES.push(
   {
@@ -796,4 +796,94 @@ KNOWLEDGE_ENTRIES.push(
     ],
     page: "p.45~46",
   },
+);
+
+// Chapter 3~7: 레벨 공식·새치커버·사용량. 표 값은 lib/colorBasicBook.ts 에서 가져온다.
+KNOWLEDGE_ENTRIES.push(
+  {
+    id: "cb-tone-up-formula",
+    sourceId: CB,
+    title: "톤업 레벨 공식: 모질별로 더하는 염모제 레벨",
+    keywords: ["톤업", "밝게", "밝히기", "리프트", "레벨업", "몇레벨", "경모", "연모", "보통모", "곱슬", "기염모", "매직", "펌퇴색"],
+    summary: "원하는 명도와 같은 레벨의 염모제를 쓰면 원하는 만큼 밝아지지 않습니다. 모질과 베이스에 따라 원하는 명도에 더하거나 빼서 염모제 레벨을 고릅니다.",
+    points: [
+      ...TONE_UP_LEVEL_ADJUST.map((a) => `${a.hair}: 원하는 명도 ${a.add > 0 ? "+" : ""}${a.add}Lv`),
+      "기염모(염색이력)는 염모제가 인공염료를 분해하지 못하므로 +4Lv 염모제에 산화제를 9%로 높여야 톤업된다.",
+    ],
+    page: "p.71~72",
+  },
+  {
+    id: "cb-root-by-hair-type",
+    sourceId: CB,
+    title: "모질별 뿌리염색 명도 조절법 (원하는 10Lv 기준)",
+    keywords: ["뿌리염색", "뿌리", "신생모", "발수성모", "곱슬모", "건조모", "프리소프트닝", "보통모"],
+    summary: "같은 10레벨을 원해도 모질에 따라 뿌리염색 약제 레벨과 산화제, 시작 상태가 달라집니다.",
+    points: ROOT_BY_HAIR_TYPE.map((r) => `${r.hair}: ${r.recipe}${r.why ? ` — ${r.why}` : ""}`),
+    page: "p.83",
+  },
+  {
+    id: "cb-tone-down-formula",
+    sourceId: CB,
+    title: "톤다운 공식: 베이스 레벨별 N(NB) 염모제 레벨",
+    keywords: ["톤다운", "어둡게", "다운", "nb", "내추럴", "베이스", "명도차이", "기염모", "신생모"],
+    summary: "톤다운은 NB(내추럴) 계열을 반드시 섞고 산화제는 3% 이하로 씁니다. 베이스가 밝을수록 같은 넘버를 발라도 결과가 밝게 나옵니다.",
+    points: [
+      ...TONE_DOWN_TABLE.map((t) => `${t.base}Lv 베이스: ${t.rows.map(([sh, r]) => `${sh}/N → ${r}Lv`).join(", ")}`),
+      "컬러감을 살리려면 한색은 컬러:NB 2:1, 난색은 1:1로 섞는다.",
+      "명도 차이가 많이 날 때: (기염모+신생모)÷2 결과가 10Lv 이하면 그보다 2레벨 낮은 약제, 11Lv 이상이면 결과에서 원하는 명도를 뺀 레벨의 새치커버(패션그레이) 약제를 3%로 기염모에, 신생모에는 원하는 레벨 + 6%를 먼저 도포한다.",
+    ],
+    page: "p.73~74",
+  },
+  {
+    id: "cb-gray-cover-formula",
+    sourceId: CB,
+    title: "새치커버 공식: 새치량별 염모제 레벨",
+    keywords: ["새치", "새치커버", "커버", "흰머리", "백모", "그레이커버", "새치염색", "몇레벨", "10%", "20%", "30%", "40%", "50%"],
+    summary: "새치커버 염모제는 7Lv·새치 30~40% 기준으로 만들어져 있습니다. 새치가 적으면 밝은 레벨, 많으면 어두운 레벨을 골라야 결과가 비슷하게 7Lv 정도로 나옵니다.",
+    points: [
+      ...GRAY_COVER_LEVEL.map((g) => `새치 ${g.from === g.to ? `${g.from}%` : `${g.from}~${g.to}%`} → ${g.level}Lv 새치커버 염모제`),
+      "흰머리가 많은 곳부터 도포하고, 산화제는 6%만 쓴다.",
+      "도포량은 멋내기 염색의 1.5배.",
+    ],
+    page: "p.106",
+  },
+  {
+    id: "cb-amount-by-length",
+    sourceId: CB,
+    title: "기장별 염모제 총 사용량",
+    keywords: ["사용량", "도포량", "약제량", "몇g", "몇그램", "그램", "기장", "숏", "미디움", "롱"],
+    summary: "1제와 2제를 1:1로 섞는 기준의 총 사용량입니다.",
+    points: AMOUNT_BY_LENGTH.map((a) => `${a.length}: 총 ${a.total} (1제 ${a.first})`),
+    page: "p.111",
+  },
+);
+
+// 『YANGLEEHAIR SIGNATURE FOILWORK DESIGN』 탈색모 디자인 레시피와 호일워크 용어. 데이터는 lib/foilworkRecipes.ts.
+const YL = "yangleehair-foilwork";
+KNOWLEDGE_SOURCES.push({
+  id: YL,
+  title: "YANGLEEHAIR SIGNATURE FOILWORK DESIGN",
+  author: "사용자 제공 촬영본 PDF",
+  url: "",
+  note: "2026-10-30 제공 \"126.pdf\"(책 p.14~157), \"UNIQUE DESIGN.pdf\"(p.158~171). 레시피의 색 이름과 목표 컬러 매핑은 사진을 보고 Claude가 붙임.",
+});
+KNOWLEDGE_ENTRIES.push(
+  ...FOILWORK_TERMS.map(([term, def], i) => ({
+    id: `yl-term-${i}`,
+    sourceId: YL,
+    title: `호일워크 용어: ${term}`,
+    keywords: term.split(/[·()\s]+/).filter(Boolean),
+    summary: def,
+    points: [],
+    page: "p.18",
+  })),
+  ...FOILWORK_RECIPES.map((r) => ({
+    id: r.id,
+    sourceId: YL,
+    title: `${isPartialDesign(r) ? "디자인" : "원톤"} 레시피: ${r.look}`,
+    keywords: [...r.targets, ...r.look.split(/[\s·+()]+/).filter((w) => w.length >= 2), "레시피"],
+    summary: `${r.base} 베이스 · ${r.formula}`,
+    points: r.steps ?? [],
+    page: r.page,
+  })),
 );

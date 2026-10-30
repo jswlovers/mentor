@@ -210,9 +210,22 @@ export const FOILWORK_TERMS: [string, string][] = [
   ["루트 섀도우·루트 멜트", "모근 컬러를 디자인 있게 어둡게, 또는 코밍으로 녹아내리듯 연결"],
 ];
 
-/** 추천 결과 안내 문구: 목표 컬러에 맞는 탈색모 디자인 레시피(탈색·토닝일 때만 의미가 있다). */
+/** 하이라이트·옴브레·투톤처럼 일부만 다르게 넣는 디자인인지(전체 원톤 토닝이 아닌지). */
+export function isPartialDesign(r: FoilworkRecipe): boolean {
+  return (
+    /design|highlight|ombre|balayage|money|half/i.test(r.base) ||
+    /하이라이트|로우라이트|옴브레|발레아쥬|시크릿|투톤|디자인|에어터치|그라데이션|포인트|머니피스|이너|\+|·/.test(r.look)
+  );
+}
+
+/** 추천 결과 안내 문구: 목표 컬러에 맞는 탈색모 레시피(탈색·토닝일 때만 의미가 있다).
+ *  컬러핏 추천은 전체 토닝이라 원톤 레시피를 먼저 쓰고, 없을 때만 부분 디자인 레시피를 표시해 보여준다. */
 export function foilworkRecipeNotes(targetName: string, toning: boolean): string[] {
   if (!toning) return [];
   const hits = FOILWORK_RECIPES.filter((r) => r.targets.includes(targetName));
-  return hits.slice(0, 2).map((r) => `양리헤어 디자인 레시피 · ${r.look} (${r.base} 베이스): ${r.formula}. 디자인·모발 상태에 따라 조정하세요.`);
+  const oneTone = hits.filter((r) => !isPartialDesign(r));
+  const picked = oneTone.length ? oneTone : hits.filter(isPartialDesign);
+  return picked
+    .slice(0, 2)
+    .map((r) => `양리헤어 ${isPartialDesign(r) ? "부분 디자인" : "원톤"} 레시피 · ${r.look} (${r.base} 베이스): ${r.formula}. 디자인·모발 상태에 따라 조정하세요.`);
 }

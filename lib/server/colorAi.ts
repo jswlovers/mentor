@@ -6,7 +6,7 @@ import { COLORFIT_PLANS, isColorfitPlan, type ColorfitPlan } from "./pricing";
 import { harmonyNotes } from "../colorHarmony";
 import { grayHistoryLabel, grayPercentOf } from "../levelChart";
 import { proRecipeNotes } from "../proRecipes";
-import { colorBasicNotes } from "../colorBasicBook";
+import { colorBasicNotes, toneUpPlan } from "../colorBasicBook";
 import { foilworkRecipeNotes } from "../foilworkRecipes";
 import { HUE_LABEL, complement, underlyingPigment } from "../colorWheel";
 import {
@@ -109,7 +109,10 @@ export function computeRecommendation(input: RecommendInput): Formula {
   // 3레벨 이상 톤다운: 조정색을 넣고, 넘버는 목표보다 1레벨 어둡게 고른다.
   const toneDown = isToneDown(targetLevel, currentLevel);
   const drop = currentLevel - targetLevel;
-  const shadeLevel = toneDown ? toneDownShadeLevel(targetLevel) : targetLevel;
+  // 염모제로 밝힐 때는 책의 톤업 공식대로 목표보다 높은(연모는 낮은) 넘버를 고른다.
+  const bleachFirst = !toning && (levelGap >= 4 || (targetLevel >= BLEACH_LEVEL && levelGap > 0));
+  const toneUp = !toning && !toneDown && !bleachFirst && levelGap > 0 ? toneUpPlan(targetLevel, input.thickness, input.history) : null;
+  const shadeLevel = toneDown ? toneDownShadeLevel(targetLevel) : toneUp ? toneUp.level : targetLevel;
   // 희석용은 이름이 클리어인 제품을 먼저 쓴다. 라이트너는 밝히는 제품이라 희석용으로 뒤로 보낸다.
   const clearRank = (r: ShadeRef) => (/라이트너|lightner/i.test(`${r.shade.code} ${r.shade.name ?? ""}`) ? 0 : /클리어|clear|CL/i.test(`${r.shade.code} ${r.shade.name ?? ""}`) ? 2 : 1);
   const byClear = (a: ShadeRef, b: ShadeRef) => clearRank(b) - clearRank(a) || (b.shade.level ?? 0) - (a.shade.level ?? 0);
@@ -124,7 +127,7 @@ export function computeRecommendation(input: RecommendInput): Formula {
         ? `${targetLevel}레벨은 염모제로 올릴 수 없는 명도예요. 먼저 ${targetLevel + 1}레벨 정도까지 탈색한 뒤 토닝하세요.`
         : `이미 ${currentLevel}레벨까지 밝혀진 모발이라 탈색 없이 바로 토닝할 수 있어요.`,
     );
-  } else if (levelGap >= 4 || (targetLevel >= BLEACH_LEVEL && levelGap > 0)) {
+  } else if (bleachFirst) {
     matchScore -= 8;
     notes.push(`현재 ${currentLevel}레벨에서 목표 ${targetLevel}레벨까지 ${levelGap}레벨을 올려야 해요. 염모제만으로는 어려워 탈색 후 진행을 권장해요.`);
   } else if (toneDown) {
@@ -148,7 +151,9 @@ export function computeRecommendation(input: RecommendInput): Formula {
     );
   } else if (!toning && primary.shade.level !== null && Math.abs(primary.shade.level - shadeLevel) >= 2) {
     matchScore -= 6;
-    notes.push(`${toneDown ? "보정한 " : "목표 "}${shadeLevel}레벨과 보유 넘버(${primary.shade.code}) 레벨 차이가 커서 발색이 달라질 수 있어요.`);
+    notes.push(`${toneDown || toneUp ? "보정한 " : "목표 "}${shadeLevel}레벨과 보유 넘버(${primary.shade.code}) 레벨 차이가 커서 발색이 달라질 수 있어요.`);
+  } else if (toneUp && primary.shade.level !== null && primary.shade.level !== shadeLevel) {
+    notes.push(`톤업 공식상 ${shadeLevel}레벨 넘버가 맞지만 보유한 ${familyNames(mainFamilies)} 계열에 ${shadeLevel}레벨이 없어 가장 가까운 ${shadeLabel(primary)}(${primary.shade.level}레벨)를 골랐어요.`);
   }
 
   // 2) 보정(보색 원리): 목표 레벨에서 드러나는 잔류 색소를 색상환의 보색 계열로 지운다.
@@ -250,6 +255,8 @@ export function computeRecommendation(input: RecommendInput): Formula {
   const devSteps = [3, 4.5, 6, 9];
   let devIndex = levelGap >= 3 ? 3 : levelGap >= 1 ? 2 : levelGap === 0 ? 1 : 0;
   if (history.includes("손상모") || history.includes("탈색 1회")) devIndex = Math.max(0, devIndex - 1);
+  // 기염모 톤업은 책 공식대로 9%로 높인다.
+  if (toneUp?.dyed) devIndex = 3;
   const developerPercent = toning ? (history.includes("손상모") ? 1.5 : 3) : devSteps[devIndex];
   const ratio = toning ? (clearPart >= 2 ? "1:2" : "1:1") : developerPercent <= 4.5 ? "1:1" : "1:1.5";
 

@@ -134,8 +134,11 @@ function score(qSpaced: string, qCompact: string, qBigrams: Set<string>, r: Row)
   let s = 0;
   // 동의어 정규화 후 같아지는 키워드(호일/포일 등)는 한 번만 센다.
   const keywords = new Set((JSON.parse(r.keywords) as string[]).map((k) => compact(normalize(k))));
-  for (const k of keywords) {
-    if (keywordHit(qSpaced, qCompact, k)) s += k.length >= 3 ? 4 : 3;
+  const hits = [...keywords].filter((k) => keywordHit(qSpaced, qCompact, k));
+  // 더 긴 키워드에 포함된 키워드(호일워크 안의 호일 등)는 같은 단어를 두 번 세지 않게 뺀다.
+  for (const k of hits) {
+    if (hits.some((o) => o !== k && o.includes(k))) continue;
+    s += k.length >= 3 ? 4 : 3;
   }
   const title = bigrams(normalize(r.title));
   const body = bigrams(normalize(`${r.summary} ${r.points}`));

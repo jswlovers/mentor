@@ -67,7 +67,7 @@ export default function Home() {
   return (
     <div className="pb-16">
       <section className="border-b border-border bg-surface px-6 py-10 md:px-10 md:py-14">
-        <p className="text-xs font-bold uppercase tracking-[0.22em] text-rose-400">Beauty SOS</p>
+        <p className="text-xs font-bold uppercase tracking-[0.22em] text-rose-400">Hey, SAM</p>
         <h1 className="mt-2 text-3xl font-extrabold tracking-tight md:text-4xl">
           {me ? `${me.name}님, 오늘도 좋은 헤어 되세요` : "지금, 전문가에게 물어보세요"}
         </h1>

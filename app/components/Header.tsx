@@ -50,12 +50,17 @@ export default function Header() {
     <>
     <header className="sticky top-0 z-10 border-b border-border bg-background/85 px-4 py-3 backdrop-blur-md">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <Link href="/" className="flex flex-col leading-tight">
+        <Link href="/" className="flex flex-col items-start leading-tight">
+          {/* 생각풍선: 말풍선 + 로고 쪽으로 내려오는 작은 점 두 개 */}
+          <span className="relative mb-2.5 ml-2 rounded-full border border-muted/50 bg-background px-2 py-0.5 text-[10px] text-muted">
+            {SITE_TAGLINE}…
+            <span className="absolute -bottom-2 left-2.5 h-2 w-2 rounded-full border border-muted/50 bg-background" />
+            <span className="absolute -bottom-3 left-1 h-1 w-1 rounded-full border border-muted/50 bg-background" />
+          </span>
           <span className="flex items-baseline gap-2">
             <span className="text-lg font-bold tracking-tight text-rose-400">{SITE_LOGO}</span>
             <span className="text-xs text-muted">{SITE_NAME}</span>
           </span>
-          <span className="text-[11px] tracking-wide text-muted">{SITE_TAGLINE}</span>
         </Link>
         <div className="flex max-w-full flex-wrap items-center justify-end gap-2 text-sm">
           {me ? (

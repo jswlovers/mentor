@@ -51,11 +51,34 @@ export default function Header() {
     <header className="sticky top-0 z-10 border-b border-border bg-background/85 px-4 py-3 backdrop-blur-md">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Link href="/" className="flex flex-col items-start leading-tight">
-          {/* 생각풍선: 말풍선 + 로고 쪽으로 내려오는 작은 점 두 개 */}
-          <span className="relative mb-2.5 ml-2 rounded-full border border-muted/50 bg-background px-2 py-0.5 text-[10px] text-muted">
-            {SITE_TAGLINE}…
-            <span className="absolute -bottom-2 left-2.5 h-2 w-2 rounded-full border border-muted/50 bg-background" />
-            <span className="absolute -bottom-3 left-1 h-1 w-1 rounded-full border border-muted/50 bg-background" />
+          {/* 구름 말풍선: 원 여러 개를 테두리색으로 한 번, 채움색으로 한 번 겹쳐 그려 바깥 윤곽만 남긴다 */}
+          <span className="relative -mb-0.5 ml-1 block h-[42px] w-[84px]">
+            <svg viewBox="0 -4 120 60" className="absolute inset-0 h-full w-full" aria-hidden>
+              <defs>
+                <g id="tagline-cloud">
+                  <circle cx="22" cy="26" r="13" />
+                  <circle cx="40" cy="16" r="13" />
+                  <circle cx="62" cy="13" r="14" />
+                  <circle cx="84" cy="16" r="13" />
+                  <circle cx="100" cy="26" r="12" />
+                  <circle cx="80" cy="31" r="12" />
+                  <circle cx="54" cy="32" r="12" />
+                  <circle cx="32" cy="32" r="10" />
+                  <rect x="22" y="18" width="78" height="18" />
+                  <path d="M28 36 Q24 48 10 54 Q32 50 42 38 Z" />
+                </g>
+                <linearGradient id="tagline-fill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stopColor="#fecdd3" />
+                  <stop offset="1" stopColor="#f9a8d4" />
+                </linearGradient>
+              </defs>
+              <use href="#tagline-cloud" fill="#f472b6" stroke="#f472b6" strokeWidth="3" />
+              <use href="#tagline-cloud" fill="url(#tagline-fill)" />
+              <ellipse cx="60" cy="6" rx="24" ry="3.5" fill="#fff" opacity="0.55" />
+            </svg>
+            <span className="absolute inset-x-0 top-0 flex h-[36px] items-center justify-center text-[10px] font-bold text-rose-900">
+              {SITE_TAGLINE}…
+            </span>
           </span>
           <span className="flex items-baseline gap-2">
             <span className="text-lg font-bold tracking-tight text-rose-400">{SITE_LOGO}</span>

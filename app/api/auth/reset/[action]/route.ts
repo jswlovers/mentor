@@ -41,7 +41,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ action:
 
     const code = String(crypto.randomInt(0, 1_000_000)).padStart(6, "0");
     upsert.run(u.id, hash(u.id, code), Date.now() + CODE_TTL_MS);
-    const sent = await sendSms(phone, `[미용 SOS] 비밀번호 재설정 인증번호 ${code} (10분 이내 입력)`);
+    const sent = await sendSms(phone, `[헤이쌤] 비밀번호 재설정 인증번호 ${code} (10분 이내 입력)`);
     if (!sent.ok) return Response.json({ error: "인증번호를 보내지 못했어요. 잠시 후 다시 시도해주세요" }, { status: 502 });
     // 개발/테스트에서만(문자 발송이 mock이고 SMS_DEV_ECHO=1) 화면에 번호를 돌려준다.
     const echo = sent.mocked && process.env.SMS_DEV_ECHO === "1" ? { devCode: code } : {};

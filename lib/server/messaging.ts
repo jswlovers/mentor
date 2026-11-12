@@ -12,7 +12,7 @@ import { db } from "./db";
  *  - 모든 발송은 message_log에 기록한다.
  */
 
-const BRAND = "[미용 SOS] ";
+const BRAND = "[헤이쌤] ";
 
 type Vars = Record<string, string>;
 type Template = { env: string; text: (v: Vars) => string; throttleMinutes?: number };

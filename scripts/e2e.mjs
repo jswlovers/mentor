@@ -327,7 +327,7 @@ await admin(`/api/admin/charges/${pend.id}/approve`, "POST");
 await new Promise((res) => setTimeout(res, 300));
 const log = (await admin("/api/admin/messages")).data;
 check("충전 승인 이벤트가 알림 기록(charge_approved)", log.log.some((l) => l.kind === "charge_approved" && l.status === "mock" && l.text.includes("5,000코인")), JSON.stringify(log.log.slice(0, 3)));
-check("발송 문구에 브랜드 접두어", log.log.every((l) => l.text.startsWith("[미용 SOS] ")));
+check("발송 문구에 브랜드 접두어", log.log.every((l) => l.text.startsWith("[헤이쌤] ")));
 check("수신 가능 회원 통계", log.stats.consented === 1 && log.stats.verified === 1, JSON.stringify(log.stats));
 
 // 수신 동의 철회 → 이후 발송 안 됨

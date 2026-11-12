@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import JobsBoard from "../JobsBoard";
 import CafeServiceNav from "../CafeServiceNav";
-export const metadata: Metadata = { title: "구인구직 | 미용 SOS 라운지", description: "미용실 구인 공고와 구직 글을 지역 지도로 찾아보세요." };
+export const metadata: Metadata = { title: "구인구직 | 헤이쌤 라운지", description: "미용실 구인 공고와 구직 글을 지역 지도로 찾아보세요." };
 export default async function JobsPage({ searchParams }: { searchParams: Promise<{ side?: string }> }) {
     const { side } = await searchParams;
     return <div className="space-y-5 px-6 py-8 md:px-10">

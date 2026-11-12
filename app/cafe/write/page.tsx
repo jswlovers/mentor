@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import CafeEditor from "../CafeEditor";
-export const metadata: Metadata = { title: "라운지 글쓰기 | 미용 SOS" };
+export const metadata: Metadata = { title: "라운지 글쓰기 | 헤이쌤" };
 export default async function WritePage({ searchParams }: {
     searchParams: Promise<{
         board?: string;

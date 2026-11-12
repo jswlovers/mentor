@@ -28,7 +28,7 @@ export default function Intro() {
   const { me } = useMe();
   return (
     <section className="border-b px-4 py-8 sm:py-10" aria-labelledby="intro-title">
-      <p className="text-sm font-semibold text-rose-600">미용 SOS</p>
+      <p className="text-sm font-semibold text-rose-600">헤이쌤</p>
       <h1 id="intro-title" className="mt-2 text-2xl font-bold leading-snug sm:text-3xl">
         시술 중에 막혔나요?
         <br />

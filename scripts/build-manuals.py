@@ -1,7 +1,7 @@
 """docs/*.md 매뉴얼을 PDF로 만든다 (Markdown → HTML → Edge headless 인쇄).
 
 사용: python scripts/build-manuals.py
-출력: docs/미용SOS_사용자매뉴얼.pdf, 관리자매뉴얼.pdf, 추가기능설계서.pdf
+출력: docs/헤이쌤_사용자매뉴얼.pdf, 관리자매뉴얼.pdf, 추가기능설계서.pdf
 필요: pip install markdown, Microsoft Edge 또는 Chrome
 """
 import datetime
@@ -22,9 +22,9 @@ BROWSERS = [
 ]
 
 MANUALS = [
-    ("user-manual.md", "미용SOS_사용자매뉴얼.pdf", "미용 SOS 사용자 매뉴얼", "회원 · 전문가용"),
-    ("admin-manual.md", "미용SOS_관리자매뉴얼.pdf", "미용 SOS 관리자 매뉴얼", "운영자용"),
-    ("feature-roadmap.md", "미용SOS_추가기능설계서.pdf", "미용 SOS 추가 기능 설계서", "기획 · 운영 검토용"),
+    ("user-manual.md", "헤이쌤_사용자매뉴얼.pdf", "헤이쌤 사용자 매뉴얼", "회원 · 전문가용"),
+    ("admin-manual.md", "헤이쌤_관리자매뉴얼.pdf", "헤이쌤 관리자 매뉴얼", "운영자용"),
+    ("feature-roadmap.md", "헤이쌤_추가기능설계서.pdf", "헤이쌤 추가 기능 설계서", "기획 · 운영 검토용"),
 ]
 
 CSS = """
@@ -67,7 +67,7 @@ def render(md_name: str, title: str, audience: str) -> str:
     body = markdown.markdown(text, extensions=["tables", "fenced_code", "sane_lists"])
     today = datetime.date.today().strftime("%Y-%m-%d")
     return f"""<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>{title}</title><style>{CSS}</style></head><body>
-<section class="cover"><div class="brand">미용 SOS</div><h1>{title.replace('미용 SOS ', '')}</h1><div class="sub">{audience}</div>
+<section class="cover"><div class="brand">헤이쌤</div><h1>{title.replace('헤이쌤 ', '')}</h1><div class="sub">{audience}</div>
 <div class="meta">https://mentor.sean2022.one:3004<br>작성일 {today}</div></section>
 {body}</body></html>"""
 

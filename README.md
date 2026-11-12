@@ -1,4 +1,4 @@
-# 미용 SOS (mentor)
+# 헤이쌤 (mentor)
 
 미용인이 시술·매장 운영 중 막힌 문제를 올리고, 검증된 현직 전문가에게 답을 받는 서비스.
 무료 Q&A + 유료 1:1 상담(채팅·보이스톡·페이스톡), 코인 결제·전문가 정산을 포함합니다.
@@ -36,8 +36,8 @@ npm run backup                 # 지금 바로 백업 (서버는 BACKUP_INTERVAL
 
 ## 문서
 
-- [사용자 매뉴얼 (PDF)](docs/미용SOS_사용자매뉴얼.pdf) · [원본](docs/user-manual.md)
-- [관리자 매뉴얼 (PDF)](docs/미용SOS_관리자매뉴얼.pdf) · [원본](docs/admin-manual.md)
+- [사용자 매뉴얼 (PDF)](docs/헤이쌤_사용자매뉴얼.pdf) · [원본](docs/user-manual.md)
+- [관리자 매뉴얼 (PDF)](docs/헤이쌤_관리자매뉴얼.pdf) · [원본](docs/admin-manual.md)
 - PDF 재생성: `python scripts/build-manuals.py` (`pip install markdown`, Edge/Chrome 필요)
 
 ## 구조

@@ -1,7 +1,7 @@
 import LegalPage from "../components/LegalPage";
 import { AUTO_REFUND_MINUTES } from "@/lib/server/pricing";
 
-export const metadata = { title: "환불 규정 - 미용 SOS" };
+export const metadata = { title: "환불 규정 - 헤이쌤" };
 
 export default function RefundPolicy() {
   return (

@@ -3,7 +3,7 @@ import Link from 'next/link';
 import CafeFeed from './CafeFeed';
 import CafeCalendar from './CafeCalendar';
 import { CAFE_SERVICES, serviceHref } from '@/lib/cafeServices';
-export const metadata:Metadata={title:'라운지 | 미용 SOS',description:'미용인 소통, 기술 교육, 채용, 모델·봉사 모집, 쇼핑과 회원 활동을 한 곳에서.'};
+export const metadata:Metadata={title:'라운지 | 헤이쌤',description:'미용인 소통, 기술 교육, 채용, 모델·봉사 모집, 쇼핑과 회원 활동을 한 곳에서.'};
 export default async function CafePage({searchParams}:{searchParams:Promise<{board?:string}>}) {
  const {board}=await searchParams;
  return <div className="pb-16">

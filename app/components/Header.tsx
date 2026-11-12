@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { SITE_LOGO, SITE_NAME } from "@/lib/server/site";
 import { useEffect } from "react";
 import { api, jsonInit, notifyMeChanged, useMe } from "@/lib/client";
 import Avatar from "./Avatar";
@@ -49,7 +50,10 @@ export default function Header() {
     <>
     <header className="sticky top-0 z-10 border-b border-border bg-background/85 px-4 py-3 backdrop-blur-md">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <Link href="/" className="text-lg font-bold tracking-tight text-rose-400">미용 SOS</Link>
+        <Link href="/" className="flex items-baseline gap-2">
+          <span className="text-lg font-bold tracking-tight text-rose-400">{SITE_LOGO}</span>
+          <span className="text-xs text-muted">{SITE_NAME}</span>
+        </Link>
         <div className="flex max-w-full flex-wrap items-center justify-end gap-2 text-sm">
           {me ? (
             <>

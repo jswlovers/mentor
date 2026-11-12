@@ -1,6 +1,6 @@
 import LegalPage from "../components/LegalPage";
 
-export const metadata = { title: "개인정보 처리방침 - 미용 SOS" };
+export const metadata = { title: "개인정보 처리방침 - 헤이쌤" };
 
 export default function Privacy() {
   return (

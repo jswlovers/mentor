@@ -1,13 +1,13 @@
 import LegalPage from "../components/LegalPage";
 import { TIER_KEYS, TIERS } from "@/lib/server/pricing";
 
-export const metadata = { title: "이용약관 - 미용 SOS" };
+export const metadata = { title: "이용약관 - 헤이쌤" };
 
 export default function Terms() {
   return (
     <LegalPage title="이용약관">
       <h2 className="font-semibold">제1조 (목적)</h2>
-      <p>이 약관은 미용 SOS(이하 &quot;서비스&quot;)가 제공하는 미용 시술·매장 운영 상담 중개 서비스의 이용 조건과 절차, 회원과 운영자의 권리·의무를 정합니다.</p>
+      <p>이 약관은 헤이쌤(이하 &quot;서비스&quot;)가 제공하는 미용 시술·매장 운영 상담 중개 서비스의 이용 조건과 절차, 회원과 운영자의 권리·의무를 정합니다.</p>
       <h2 className="font-semibold">제2조 (서비스의 성격)</h2>
       <p>서비스는 질문자와 검증된 전문가를 연결하는 <b>플랫폼</b>입니다. 전문가의 답변은 개인의 경험과 의견이며, 시술 결과나 효과를 보증하지 않습니다. 시술에 대한 최종 판단과 책임은 시술자에게 있습니다.</p>
       <h2 className="font-semibold">제3조 (회원가입)</h2>

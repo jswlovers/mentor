@@ -38,7 +38,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ action:
 
     const code = String(crypto.randomInt(0, 1_000_000)).padStart(6, "0");
     upsertCode.run(user.id, phone, hash(user.id, code), Date.now() + CODE_TTL_MS);
-    const sent = await sendSms(phone, `[미용 SOS] 인증번호 ${code} (5분 이내 입력)`);
+    const sent = await sendSms(phone, `[헤이쌤] 인증번호 ${code} (5분 이내 입력)`);
     if (!sent.ok) return Response.json({ error: "인증번호를 보내지 못했어요. 잠시 후 다시 시도해주세요" }, { status: 502 });
     // 개발/테스트에서만(문자 발송이 mock이고 SMS_DEV_ECHO=1) 화면에 번호를 돌려준다. 운영에서는 설정하지 않는다.
     const echo = sent.mocked && process.env.SMS_DEV_ECHO === "1" ? { devCode: code } : {};

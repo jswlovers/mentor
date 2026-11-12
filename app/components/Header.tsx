@@ -52,7 +52,7 @@ export default function Header() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Link href="/" className="flex flex-col items-start leading-tight">
           {/* 구름 말풍선: 원 여러 개를 테두리색으로 한 번, 채움색으로 한 번 겹쳐 그려 바깥 윤곽만 남긴다 */}
-          <span className="relative -mb-0.5 ml-1 block h-[42px] w-[84px]">
+          <span className="relative mb-0.5 ml-1 block h-[34px] w-[68px]">
             <svg viewBox="0 -4 120 60" className="absolute inset-0 h-full w-full" aria-hidden>
               <defs>
                 <g id="tagline-cloud">
@@ -67,16 +67,11 @@ export default function Header() {
                   <rect x="22" y="18" width="78" height="18" />
                   <path d="M28 36 Q24 48 10 54 Q32 50 42 38 Z" />
                 </g>
-                <linearGradient id="tagline-fill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0" stopColor="#fecdd3" />
-                  <stop offset="1" stopColor="#f9a8d4" />
-                </linearGradient>
               </defs>
-              <use href="#tagline-cloud" fill="#f472b6" stroke="#f472b6" strokeWidth="3" />
-              <use href="#tagline-cloud" fill="url(#tagline-fill)" />
-              <ellipse cx="60" cy="6" rx="24" ry="3.5" fill="#fff" opacity="0.55" />
+              <use href="#tagline-cloud" fill="#5c3446" stroke="#5c3446" strokeWidth="2.5" />
+              <use href="#tagline-cloud" fill="#1d1219" />
             </svg>
-            <span className="absolute inset-x-0 top-0 flex h-[36px] items-center justify-center text-[10px] font-bold text-rose-900">
+            <span className="absolute inset-x-0 top-0 flex h-[29px] items-center justify-center pl-1 text-[10px] text-rose-200/90" style={{ fontFamily: "var(--font-soft)" }}>
               {SITE_TAGLINE}…
             </span>
           </span>

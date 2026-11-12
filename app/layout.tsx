@@ -1,9 +1,13 @@
 import type { Metadata, Viewport } from "next";
+import { Gowun_Dodum } from "next/font/google";
 import Link from "next/link";
 import { siteUrl, SITE_DESCRIPTION, SITE_LOGO, SITE_NAME, SITE_TAGLINE } from "@/lib/server/site";
 import BusinessInfo from "./components/BusinessInfo";
 import Header from "./components/Header";
 import "./globals.css";
+
+// 헤더 말풍선 부제용 둥근 서체. 한글 글리프는 subset 미리 로드 대상이 아니라 preload를 끈다.
+const softFont = Gowun_Dodum({ weight: "400", subsets: ["latin"], preload: false, variable: "--font-soft" });
 
 const verification: Metadata["verification"] = {
   google: process.env.GOOGLE_SITE_VERIFICATION || undefined,
@@ -21,7 +25,7 @@ export const viewport: Viewport = { width: "device-width", initialScale: 1 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="ko" className="h-full antialiased">
+    <html lang="ko" className={`h-full antialiased ${softFont.variable}`}>
       <body className="min-h-full bg-background text-foreground">
         <div className="mx-auto flex min-h-screen max-w-5xl flex-col">
           <Header />

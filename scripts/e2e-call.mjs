@@ -16,8 +16,8 @@ let pass = 0, fail = 0;
 const ok = (n, c, x = "") => { if (c) pass++; else fail++; console.log((c ? "PASS " : "FAIL ") + n + (c ? "" : " -> " + x)); };
 
 const a = cl(), e = cl();
-await a("/api/auth/login", "POST", { username: "test_asker", password: "test1234!" });
-await e("/api/auth/login", "POST", { username: "test_expert", password: "test1234!" });
+await a("/api/auth/login", "POST", { username: "test_asker@mail.sean2022.one", password: "ouU@FuiVWNaEQcpZcU4n" });
+await e("/api/auth/login", "POST", { username: "test_expert@mail.sean2022.one", password: "ouU@FuiVWNaEQcpZcU4n" });
 const q = (await a("/api/questions")).data[0].id;
 async function newCall(who, type) {
   const f = new FormData(); f.set("roomId", q); f.set("kind", "call"); f.set("callType", type);

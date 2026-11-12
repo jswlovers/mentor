@@ -22,9 +22,10 @@
 ### 현재 계정 (초기 세팅)
 | 구분 | 아이디 | 비고 |
 |---|---|---|
-| 관리자 | `admin` | 비밀번호는 전달받은 것 사용. **내 정보에서 즉시 변경 권장** |
-| 테스트 질문자 | `test_asker` / `test1234!` | 코인 30만 충전됨 |
-| 테스트 전문가 | `test_expert` / `test1234!` | 승인 완료 |
+| 관리자 | `admin@mail.sean2022.one` / `ouU@FuiVWNaEQcpZcU4n` | **내 정보에서 즉시 변경 권장** |
+| 테스트 질문자 | `test_asker@mail.sean2022.one` / `ouU@FuiVWNaEQcpZcU4n` | 코인 30만 충전됨 |
+| 테스트 전문가 | `test_expert@mail.sean2022.one` / `ouU@FuiVWNaEQcpZcU4n` | 승인 완료 |
+| 테스트 | `test1`·`test2`·`test3@mail.sean2022.one` / `ouU@FuiVWNaEQcpZcU4n` | 공통 테스트 계정 |
 
 > ⚠️ 테스트 계정은 알려진 비밀번호입니다. 운영 전 **회원 탭에서 정지**하거나 비밀번호를 초기화(임시 비밀번호는 전달하지 않고 버리기)하세요. 계정 삭제 기능은 없습니다.
 
